@@ -1,0 +1,3258 @@
+#### SCRIPT FOR PLOTS
+
+source("1. Prep of parameters and functions.R")
+source("2. Backwards iteration.R")
+source("3. Forward iteration.R")
+
+# Required packages
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(ggplotify)
+library(grid)
+library(gridExtra)
+library(gtable)
+library(png) 
+library(RCurl)
+library(maps)
+
+#### Figure S1.1 (methods) ####
+
+tempgraph_very_warm_out <- data.frame(time=1:nb_timesteps,day_type = "Very warm",place="Air",Ta=get_temperature_ext_very_warm(1:nb_timesteps))
+tempgraph_very_warm_roost <- data.frame(time=1:nb_timesteps,day_type = "Very warm",place="Roost",Ta=get_temperature_roost_very_warm(1:nb_timesteps))
+tempgraph_dynamic_warm_out <- data.frame(time=1:nb_timesteps,day_type = "Dynamic warm",place="Air",Ta=get_temperature_ext_dynamic_warm(1:nb_timesteps))
+tempgraph_dynamic_warm_roost <- data.frame(time=1:nb_timesteps,day_type = "Dynamic warm",place="Roost",Ta=get_temperature_roost_dynamic_warm(1:nb_timesteps))
+tempgraph_stable_warm_out <- data.frame(time=1:nb_timesteps,day_type = "Stable warm",place="Air",Ta=get_temperature_ext_stable_warm(1:nb_timesteps))
+tempgraph_stable_warm_roost <- data.frame(time=1:nb_timesteps,day_type = "Stable warm",place="Roost",Ta=get_temperature_roost_stable_warm(1:nb_timesteps))
+tempgraph_dynamic_cold_out <- data.frame(time=1:nb_timesteps,day_type = "Dynamic cold",place="Air",Ta=get_temperature_ext_dynamic_cold(1:nb_timesteps))
+tempgraph_dynamic_cold_roost <- data.frame(time=1:nb_timesteps,day_type = "Dynamic cold",place="Roost",Ta=get_temperature_roost_dynamic_cold(1:nb_timesteps))
+tempgraph_stable_cold_out <- data.frame(time=1:nb_timesteps,day_type = "Stable cold",place="Air",Ta=get_temperature_ext_stable_cold(1:nb_timesteps))
+tempgraph_stable_cold_roost <- data.frame(time=1:nb_timesteps,day_type = "Stable cold",place="Roost",Ta=get_temperature_roost_stable_cold(1:nb_timesteps))
+tempgraph_very_cold_out <- data.frame(time=1:nb_timesteps,day_type = "Very cold",place="Air",Ta=get_temperature_ext_very_cold(1:nb_timesteps))
+tempgraph_very_cold_roost <- data.frame(time=1:nb_timesteps,day_type = "Very cold",place="Roost",Ta=get_temperature_roost_very_cold(1:nb_timesteps))
+
+tempgraph_ALL <- rbind(tempgraph_very_warm_out,tempgraph_very_warm_roost,tempgraph_dynamic_warm_out,tempgraph_dynamic_warm_roost,tempgraph_stable_warm_out,tempgraph_stable_warm_roost,
+                       tempgraph_dynamic_cold_out,tempgraph_dynamic_cold_roost,tempgraph_stable_cold_out,tempgraph_stable_cold_roost,tempgraph_very_cold_out,tempgraph_very_cold_roost)
+
+tempgraph_ALL$day_type <- factor(tempgraph_ALL$day_type, levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+
+temp_plot_basic<-ggplot(data=subset(tempgraph_ALL,day_type=="Very cold"), aes(x=time, y=Ta, linetype=place))+
+  geom_line(size=1)+
+  theme(legend.title = element_blank(),
+        legend.key = element_rect(colour = NA, fill = NA),
+        legend.background = element_rect(colour = NA, fill = NA),
+        legend.key.size = unit(0.55, 'cm'))
+
+temp_plot_legend = gtable_filter(ggplotGrob(temp_plot_basic), "guide-box") 
+temp_plot_legend <-as.ggplot(temp_plot_legend)
+
+temp_plot <- ggplot(data=tempgraph_ALL, aes(x=time, y=Ta, linetype=place))+
+  facet_wrap(~day_type,nrow=1)+
+  geom_rect(data = tempgraph_ALL[c(1,145,290,435,580,725),],aes(fill = day_type), xmin = -Inf,xmax = Inf,
+            ymin = -Inf,ymax = Inf, colour="black", alpha=c(0.9,0.5,0.2,0.3,0.7,0.8))+
+  scale_fill_manual(values = my_colors)+
+  geom_line(size=1, show.legend = F)+
+  labs(x='Timestep', y='Temperature (°C)')+
+  scale_y_continuous(limits=c(0,40),breaks=seq(0,40,10),expand = c(0, 0))+
+  scale_x_continuous(breaks=seq(0,73,20),expand = c(0, 0))+
+  theme_classic()+
+  guides(fill="none",linetype = "none")+
+  theme(axis.text.y = element_text(colour = "black"), 
+        axis.text.x = element_text(colour = "black"))
+
+annotation_custom2 <- function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data) 
+{
+  layer(data = data, stat = StatIdentity, position = PositionIdentity, 
+        geom = ggplot2:::GeomCustomAnn,
+        inherit.aes = TRUE, params = list(grob = grob, 
+                                          xmin = xmin, xmax = xmax, 
+                                          ymin = ymin, ymax = ymax))
+}
+
+temp_plot_legend_image =  annotation_custom2(grob=ggplotGrob(temp_plot_legend), 
+                                             data = data.frame(time = 5,place = "Roost",Ta = 35,
+                                                               day_type = factor("Very cold",levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))),
+                                             ymin = 33, ymax=38, xmin=15, xmax=35)
+
+temp_plot_new <- temp_plot + temp_plot_legend_image
+
+ann_text <- data.frame(time = -17,place = "Roost",Ta = 38,
+                       day_type = factor("Very cold",levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm")))
+
+temp_plot_new<-temp_plot_new + geom_text(data = ann_text,label = "(a)")  +
+  coord_cartesian(xlim = c(0,73),clip = "off")
+
+temptable1 <- data.frame(temperature=1:35, 
+                         metabolism_torpor=get_cost_torpor_hourly(1:35),
+                         metabolism_rest=get_cost_resting_hourly(1:35))
+
+MR_plot <- ggplot(data=temptable1, aes(x=temperature, y=metabolism_torpor))+
+  geom_line(colour="#13306dff", size=1)+
+  geom_line(aes(x=temperature, y=metabolism_rest), colour="#b8627dff", size=1)+
+  labs(x='Roost temperature (°C)', y='Metabolic cost (g) per hour')+
+  scale_y_continuous(limits=c(-0.01,0.3),breaks=seq(0,0.3,0.1),expand = c(0, 0))+
+  scale_x_continuous(breaks=seq(0,35,10),expand = c(0, 0))+
+  theme_classic()+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        plot.title = element_text(hjust = 0.5),
+        plot.margin = margin(0.85,0.2,0.2,0.2, "cm"))+
+  annotate("text", y=0.05, x=1.5, label = "Resting metabolic cost",size=3.5, hjust=0, colour="#b8627dff")+
+  annotate("text", y=0.02, x=1.5, label = "Torpor metabolic cost",size=3.5, hjust=0, colour="#13306dff")+
+  annotate("text", y=0.285, x=-6.2, label = "(b)")+
+  coord_cartesian(xlim = c(0,35), clip = "off")
+
+predation_risk_fat <- data.frame (timestep = rep(1:nb_timesteps, each = length(c(0,1,2,3))), fat = rep(c(0,1,2,3), times = nb_timesteps))
+predation_risk_fat_graph_T <- cbind(predation_risk_fat, risk_predation_baseline[predation_risk_fat[,'timestep']]*exp(predation_risk_increase*predation_risk_fat[,'fat']))
+predation_risk_fat_graph_N <- cbind(predation_risk_fat, risk_predation_baseline[predation_risk_fat[,'timestep']]*exp(predation_risk_increase*predation_risk_fat[,'fat']))
+colnames(predation_risk_fat_graph_T) = c('timestep', 'fat', 'predation')
+colnames(predation_risk_fat_graph_N) = c('timestep', 'fat', 'predation')
+
+predation_risk_fat_graph_N$fat_class <- NA
+predation_risk_fat_graph_N$fat_class[which(predation_risk_fat_graph_N$fat==0)]<-"0 g"
+predation_risk_fat_graph_N$fat_class[which(predation_risk_fat_graph_N$fat==1)]<-"1 g"
+predation_risk_fat_graph_N$fat_class[which(predation_risk_fat_graph_N$fat==2)]<-"2 g"
+predation_risk_fat_graph_N$fat_class[which(predation_risk_fat_graph_N$fat==3)]<-"3 g"
+
+predation_risk_fat_graph_T$fat_class <- NA
+predation_risk_fat_graph_T$fat_class[which(predation_risk_fat_graph_T$fat==0)]<-"0 g"
+predation_risk_fat_graph_T$fat_class[which(predation_risk_fat_graph_T$fat==1)]<-"1 g"
+predation_risk_fat_graph_T$fat_class[which(predation_risk_fat_graph_T$fat==2)]<-"2 g"
+predation_risk_fat_graph_T$fat_class[which(predation_risk_fat_graph_T$fat==3)]<-"3 g"
+
+competition_cost_table_N <- data.frame(timestep=1:nb_timesteps, comp_cost=get_competition_cost(1:nb_timesteps))
+competition_cost_table_T <- data.frame(timestep=1:nb_timesteps, comp_cost=get_competition_cost(1:nb_timesteps))
+
+pred_plot_N <- ggplot(data=predation_risk_fat_graph_N, aes(x=timestep, y=predation, colour=factor(fat_class)))+
+  geom_point(alpha=0.9)+
+  #geom_line(data=competition_cost_table_N, aes(x=timestep, y=comp_cost), colour="#990000", size=0.7)+
+  labs(y='Predation threat (prob)', x='Timestep', colour="Reserves", title="Nittedal")+
+  theme_classic()+
+  scale_x_continuous(breaks=seq(0,74,20),expand = c(0, 0))+
+  scale_y_continuous(limits=c(-0.01,0.25),breaks=seq(0,0.5,0.1),expand = c(0, 0))+
+                     #sec.axis = sec_axis( trans=~., name="Competition cost (g)", breaks=seq(0,0.5,0.1)))+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"))+
+  geom_vline(xintercept = 57.5, color = "red", size=0.5, linetype="dashed")+
+  scale_colour_grey(start = 0.8,
+                    end = 0.2)+
+  theme(legend.position = c(0.3, 0.22),
+        legend.title.align = 0.5,
+        plot.title = element_text(hjust = 0.5, size=11),
+        legend.title=element_text(size=9),
+        axis.text.y = element_text(colour = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y.right = element_blank(),
+        axis.text.y.right = element_blank(),
+        axis.text.x = element_text(colour = "black"),
+        legend.background = element_rect(fill="transparent"),
+        legend.key.size = unit(0.43, "cm"),
+        plot.margin = margin(0.2,0.2,0.65,0.2, "cm"))+
+  annotate("text", y=0.235, x=-20, label = "(d)")+
+  coord_cartesian(xlim = c(0,73.5), clip = "off")
+
+pred_plot_T <- ggplot(data=predation_risk_fat_graph_T, aes(x=timestep, y=predation, colour=factor(fat_class)))+
+  geom_point(alpha=0.9)+
+  #geom_line(data=competition_cost_table_T, aes(x=timestep, y=comp_cost), colour="#990000",size=0.7)+
+  labs(y='Predation threat (prob)', x='Timestep', colour="Gram fat", title="Trondheim")+
+  theme_classic()+
+  scale_x_continuous(limits=c(0,73.5),breaks=seq(0,73,20),expand = c(0, 0))+
+  scale_y_continuous(limits=c(-0.01,0.25),breaks=seq(0,0.5,0.1),expand = c(0, 0))+
+                     #sec.axis = sec_axis( trans=~., name="Competition cost (g)", breaks=seq(0,0.5,0.1)))+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        plot.title = element_text(hjust = 0.5))+
+  guides(colour="none")+
+  geom_vline(xintercept = 62.5, color = "red", size=0.5, linetype="dashed")+
+  scale_colour_grey(start = 0.8,
+                    end = 0.2)+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour = "black"),
+        plot.title = element_text(hjust = 0.5, size=11),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.y.right = element_text(colour = "#990000"),
+        axis.text.y.right = element_text(colour = "#990000"),
+        #plot.margin = margin(0.2,0.2,0.65,0.2, "cm"))+
+        plot.margin = margin(0.2,1.3,0.65,0.2, "cm"))
+
+pred_plot_both <- as.ggplot(grid.arrange(pred_plot_N,pred_plot_T, ncol=2))
+pred_plot_both <- pred_plot_both + annotate("text", x=0.4, y=0.045, label = "Timestep",hjust=0, size=4)
+
+tempgraph_prey <- data.frame(temperature=1:35, prey=get_prey(1:35))
+prey_plot <- ggplot(data=tempgraph_prey, aes(x=temperature, y=prey))+
+  theme_classic()+
+  geom_line(size=1)+
+  labs(x='Air temperature (°C)', y='Prey availability')+
+  scale_y_continuous(limits=c(0,1.005),breaks=seq(0,1,0.5),expand = c(0, 0))+
+  scale_x_continuous(breaks=seq(0,35,10),expand = c(0, 0))+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        plot.margin = margin(0.85,0.2,0.2,0.2, "cm"))+
+  annotate("text", y=0.95, x=-9, label = "(c)")+
+  coord_cartesian(xlim = c(0,35), clip = "off")
+
+costgraph <- data.frame(temperature=1:35, arousal=get_cost_arousing(1:35))
+
+arousal_plot <- ggplot(data=costgraph, aes(x=temperature, y=arousal))+
+  geom_line(size=0.8, colour="grey30")+
+  theme_classic()+
+  labs(x='Roost temperature', y='Rewarming cost (g)')+
+  scale_y_continuous(limits=c(0,0.115),breaks=seq(0,0.12,0.05),expand = c(0, 0))+
+  scale_x_continuous(limits=c(0,35),breaks=seq(0,35,10),expand = c(0, 0))+
+  theme(axis.text.y = element_text(colour = "black", size=7.5),
+        axis.text.x = element_text(colour = "black", size=7.5),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA),
+        axis.title.y = element_text(size=8),
+        axis.title.x = element_text(size=8))
+
+MR_plot_full <- MR_plot + annotation_custom(ggplotGrob(arousal_plot), xmin = 14, xmax = 35, 
+                                            ymin = 0.13, ymax = 0.3)
+
+method_plot <- as.ggplot(grid.arrange(temp_plot_new,pred_plot_both,MR_plot_full,prey_plot,layout_matrix=rbind
+                                      (c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                                        c(3,3,3,3,3,3,3,3,4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,2))))
+
+method_plot <- method_plot + 
+  annotate("text", x=0.06, y=0.61, label = expression(p[w]*"(Ni) = 0"),hjust=0, size=3) +
+  annotate("text", x=0.06, y=0.585, label = expression(p[w]*"(Tr) = 0.02"), hjust=0, size=3) +
+  annotate("text", x=0.218, y=0.61, label = expression(p[w]*"(Ni) = 0.01"), hjust=0, size=3) +
+  annotate("text", x=0.218, y=0.585, label = expression(p[w]*"(Tr) = 0.04"), hjust=0, size=3) +
+  annotate("text", x=0.376, y=0.61, label = expression(p[w]*"(Ni) = 0.20"), hjust=0, size=3) +
+  annotate("text", x=0.376, y=0.585, label = expression(p[w]*"(Tr) = 0.47"), hjust=0, size=3) +
+  annotate("text", x=0.534, y=0.61, label = expression(p[w]*"(Ni) = 0.07"), hjust=0, size=3) +
+  annotate("text", x=0.534, y=0.585, label = expression(p[w]*"(Tr) = 0.04"), hjust=0, size=3) +
+  annotate("text", x=0.692, y=0.61, label = expression(p[w]*"(Ni) = 0.48"), hjust=0, size=3) +
+  annotate("text", x=0.692, y=0.585, label = expression(p[w]*"(Tr) = 0.30"), hjust=0, size=3) +
+  annotate("text", x=0.85, y=0.61, label = expression(p[w]*"(Ni) = 0.24"), hjust=0, size=3) +
+  annotate("text", x=0.85, y=0.585, label = expression(p[w]*"(Tr) = 0.13"), hjust=0, size=3)
+
+ggsave("Fig. 1 (methods).jpg", plot = method_plot, width = 8.19, height = 6.56, units = "in", dpi = 300)
+
+
+
+#### Figure 1 ####
+# To plot figure 1, each location (Nittedal and Trondheim, change in prep. script and run whole prep. script) must first be run through the backwards iteration and then through the forward iteration.
+# For each of the locations run afterward the codes below.
+
+T_decision_all_dataset <- decision_all[,1:nb_indiv_forward,1:2160] 
+
+T_decision_all_dataset_reshaped<-reshape2::melt(T_decision_all_dataset[,])
+colnames(T_decision_all_dataset_reshaped)<-c("Individual","Time","value")
+T_decision_all_dataset_reshaped$decision<-NA
+
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==3)]<-"Forage"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==1)]<-"Torpor"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==2)]<-"Rest"
+
+T_decision_all_dataset_reshaped$day<-rep(seq(1,30,length.out=30),each=nb_indiv_forward*72) #for nb_indiv_forward individuals
+T_decision_all_dataset_reshaped$timestep<-NA
+
+for (day in T_decision_all_dataset_reshaped) {
+  timestep<-rep(seq(1,72,length.out=72),each=nb_indiv_forward) # for nb_indiv_forward individuals
+  T_decision_all_dataset_reshaped[,6] <- timestep
+}
+
+T_fat_state_all_dataset <- fat_state_forward_all[,1:nb_indiv_forward,1:2160] # for nb_indiv_forward individuals
+T_fat_state_all_dataset_reshaped<-reshape2::melt(T_fat_state_all_dataset[,])
+
+T_decision_all_dataset_reshaped$fat_reserves<-T_fat_state_all_dataset_reshaped$value
+
+T_day_type_all_dataset <- day_type_all[1:nb_indiv_forward,1:2160]
+T_day_type_all_dataset_reshaped<-reshape2::melt(T_day_type_all_dataset[,])
+T_decision_all_dataset_reshaped$day_type<-T_day_type_all_dataset_reshaped$value
+
+T_decision_all_dataset_reshaped<-na.omit(T_decision_all_dataset_reshaped)
+
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==1,"Very warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==2,"Dynamic warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==3,"Stable warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==4,"Dynamic cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==5,"Stable cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==6,"Very cold",T_decision_all_dataset_reshaped$day_type)
+
+T_decision_all_dataset_reshaped <- subset(T_decision_all_dataset_reshaped,fat_reserves>0) # Removing dead individuals
+
+T_decision_all_dataset_reshaped$decision <- factor(T_decision_all_dataset_reshaped$decision, levels = c("Torpor","Rest","Forage"))
+
+
+# For Trondheim
+T_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Very warm")
+T_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic warm")
+T_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Stable warm")
+T_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic cold")
+T_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Stable cold")
+T_decision_very_cold_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Very cold")
+
+# For Nittedal
+N_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Very warm")
+N_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic warm")
+N_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Stable warm")
+N_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic cold")
+N_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped,day_type=="Stable cold")
+
+
+# Plotting each single figure before putting them all together as Fig. 2 in the end
+
+# For Trondheim
+
+plot_T1 <- ggplot(T_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  #geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 1) +
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Very warm", fill="Decision")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "top")
+
+legend_1 = gtable_filter(ggplotGrob(plot_T1), "guide-box") 
+legend_1 <-as.ggplot(legend_1)
+
+plot_T1 <- plot_T1 +  guides(fill="none")
+
+ggplot_build(plot_T1)$data[[1]]
+plot_T1 <- plot_T1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T1)$data[[1]]$count)),(max(ggplot_build(plot_T1)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T2<-ggplot(T_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Dynamic warm")+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T2)$data[[1]]
+plot_T2 <- plot_T2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T2)$data[[1]]$count)),(max(ggplot_build(plot_T2)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T3<-ggplot(T_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Stable warm")+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T3)$data[[1]]
+plot_T3 <- plot_T3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T3)$data[[1]]$count)),(max(ggplot_build(plot_T3)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_T4<-ggplot(T_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Dynamic cold")+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T4)$data[[1]]
+plot_T4 <- plot_T4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T4)$data[[1]]$count)),(max(ggplot_build(plot_T4)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T5<-ggplot(T_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Stable cold")+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T5)$data[[1]]
+plot_T5 <- plot_T5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T5)$data[[1]]$count)),(max(ggplot_build(plot_T5)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T6<-ggplot(T_decision_very_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Very cold", y="Proportion of bats")+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=11))
+
+ggplot_build(plot_T6)$data[[1]]
+plot_T6 <- plot_T6 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T6)$data[[1]]$count)),(max(ggplot_build(plot_T6)$data[[1]]$count)/4)),
+                                        labels = c("0","","0.5","","1"))
+
+
+
+
+# For Nittedal
+
+plot_N1<-ggplot(N_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N1)$data[[1]]
+plot_N1 <- plot_N1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N1)$data[[1]]$count)),(max(ggplot_build(plot_N1)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_N2<-ggplot(N_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N2)$data[[1]]
+plot_N2 <- plot_N2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N2)$data[[1]]$count)),(max(ggplot_build(plot_N2)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_N3<-ggplot(N_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N3)$data[[1]]
+plot_N3 <- plot_N3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N3)$data[[1]]$count)),(max(ggplot_build(plot_N3)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_N4<-ggplot(N_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N4)$data[[1]]
+plot_N4 <- plot_N4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N4)$data[[1]]$count)),(max(ggplot_build(plot_N4)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_N5<-ggplot(N_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.85) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  labs(y="Proportion of bats")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N5)$data[[1]]
+plot_N5 <- plot_N5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N5)$data[[1]]$count)),(max(ggplot_build(plot_N5)$data[[1]]$count)/4)),
+                                        labels = c("0","","0.5","","1"))
+
+
+plot_Trondheim_all_days <- as.ggplot(grid.arrange(plot_T6,plot_T5,plot_T4,plot_T3,plot_T2,plot_T1, right=textGrob("Trondheim", rot=-90, gp=gpar(fontsize=11)), layout_matrix=rbind
+                                                  (c(1,1,1,1,
+                                                     2,2,2,
+                                                     3,3,3,
+                                                     4,4,4,
+                                                     5,5,5,
+                                                     6,6,6))))
+
+plot_Nittedal_all_days <- as.ggplot(grid.arrange(plot_N5,plot_N4,plot_N3,plot_N2,plot_N1, right=textGrob("Nittedal",hjust=0.65, rot=-90, gp=gpar(fontsize=11)), layout_matrix=rbind
+                                                 (c(NA,NA,NA,
+                                                    1,1,1,1,
+                                                    2,2,2,
+                                                    3,3,3,
+                                                    4,4,4,
+                                                    5,5,5))))
+
+plot_both_all_days <- as.ggplot(grid.arrange(plot_Trondheim_all_days,plot_Nittedal_all_days, bottom=textGrob("Timestep", gp=gpar(fontsize=11)),ncol=1))
+
+plot_both_all_days_2 <- as.ggplot(grid.arrange(plot_both_all_days,legend_1, layout_matrix=rbind
+                                               (c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(NA),
+                                                 c(2),
+                                                 c(2),
+                                                 c(2))))
+
+
+#ggsave("Fig. 2.jpg", plot = plot_both_all_days_2, width = 7.6, height = 4, units = "in", dpi = 300)
+
+
+# Add map
+
+Norway.maps <- map_data("world", region = "Norway")
+levels(as.factor(Norway.maps$subregion))
+
+map_plot1 <- ggplot(Norway.maps, aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill="lightgray")+
+  scale_x_continuous(limits=c(4.8,31),expand = c(0,0))+
+  scale_y_continuous(limits=c(56.8,72.2), expand = c(0,0))+
+  theme_void()+
+  theme(legend.position = "none",
+        plot.background = element_rect(fill = "transparent", color = "NA")) +
+  geom_point(aes(y = 60.1144, x = 10.8495), shape=21, fill=NA, colour="red", size=8, stroke=1.5)+
+  geom_point(aes(y = 63.4305, x = 10.3951), shape=21, fill=NA, colour="red", size=8, stroke=1.5)+
+  annotate("text", y=59.7144-0.7, x=10.8495, label = "Nittedal",size=8, colour="black",angle=-18)+
+  annotate("text", y=63.0305-0.7, x=10.3951, label = "Trondheim",size=8, colour="black",angle=-18)
+
+
+
+grid.newpage()
+
+png("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/map_plot1.png", width = 3, height = 4, units = 'in', res= 1000, bg = "transparent")
+
+print(map_plot1,vp=viewport(angle=18))
+
+dev.off()
+
+
+library(png) 
+library(RCurl)
+
+map_plot_new <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/map_plot1.png", native = TRUE)
+
+library(patchwork)
+
+Fig1.new <- plot_both_all_days_2 + inset_element(p = map_plot_new,
+                                                             left = -0.306,
+                                                             bottom = -0.025,
+                                                             right = 0.484,
+                                                             top = 0.6) + theme(panel.background = element_rect(fill = "transparent",
+                                                                                                                 colour = NA_character_), 
+                                                                                 plot.background = element_rect(fill = "transparent",colour = NA_character_))
+
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 1.jpeg", plot = Fig1.new, width = 180, height = 80, units="mm", dpi = 1000, bg="white")
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 1.pdf", plot = Fig1.new, width = 180, height = 80, units="mm", dpi = 1000)
+
+
+
+
+
+#### Figure 2 ####
+# To plot figure 2, each location (Nittedal and Trondheim, change in prep. script and run whole prep. script) must first be run through the backwards iteration, and then
+# the following changes must be done to the forward iteration before running the forward iteration: 
+# line 21: the fat_state_init_forward must be set as 11:30
+# line 24: the first day must be run with each of the values 1-6, one at the time (one for each day type)
+# line 63 and 64: "hide" line 63 (by adding # in front) and "open" line 64 (by removing #)
+
+T_decision_all_dataset <- decision_all[,1:100,1:72] 
+
+T_decision_all_dataset_reshaped<-reshape2::melt(T_decision_all_dataset[,,])
+colnames(T_decision_all_dataset_reshaped)<-c("Startweight","Individual","Time","value")
+T_decision_all_dataset_reshaped$decision<-NA
+
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==3)]<-"Forage"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==1)]<-"Torpor"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==2)]<-"Rest"
+
+T_decision_all_dataset_reshaped$day<-rep(seq(1,1,length.out=1),each=(length(fat_state_init_forward)*100*72))
+
+T_fat_state_all_dataset <- fat_state_forward_all[,1:100,1:72]
+T_fat_state_all_dataset_reshaped<-reshape2::melt(T_fat_state_all_dataset[,,])
+T_decision_all_dataset_reshaped$fat_reserves<-T_fat_state_all_dataset_reshaped$value
+
+T_day_type_all_dataset <- day_type_all[1:100,1:72]
+T_day_type_all_dataset_reshaped<-reshape2::melt(T_day_type_all_dataset[,])
+T_decision_all_dataset_reshaped$day_type<-T_day_type_all_dataset_reshaped$value
+
+T_decision_all_dataset_reshaped<-na.omit(T_decision_all_dataset_reshaped)
+
+# For the following codes, "open" and "close" each code so it corresponds to the first_day day-type.
+
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==1,"Very warm",T_decision_all_dataset_reshaped$day_type)
+#T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==2,"Dynamic warm",T_decision_all_dataset_reshaped$day_type)
+#T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==3,"Stable warm",T_decision_all_dataset_reshaped$day_type)
+#T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==4,"Dynamic cold",T_decision_all_dataset_reshaped$day_type)
+#T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==5,"Stable cold",T_decision_all_dataset_reshaped$day_type)
+#T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==6,"Very cold",T_decision_all_dataset_reshaped$day_type)
+
+T_decision_all_dataset_reshaped <- subset(T_decision_all_dataset_reshaped,fat_reserves>0) # Removing dead individuals
+
+T_decision_all_dataset_reshaped$decision <- factor(T_decision_all_dataset_reshaped$decision, levels = c("Torpor","Rest","Forage"))
+
+# For Trondheim
+
+T_decision_very_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very warm")
+#T_decision_dynamic_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic warm")
+#T_decision_stable_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable warm")
+#T_decision_dynamic_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic cold")
+#T_decision_stable_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable cold")
+#T_decision_very_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very cold")
+
+# For Nittedal
+
+N_decision_very_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very warm")
+#N_decision_dynamic_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic warm")
+#N_decision_stable_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable warm")
+#N_decision_dynamic_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic cold")
+#N_decision_stable_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable cold")
+
+
+# For Trondheim #
+
+T_decision_very_warm_days$ID <- paste(T_decision_very_warm_days$Startweight, "-", T_decision_very_warm_days$Individual)
+names(T_decision_very_warm_days)[names(T_decision_very_warm_days) == 'Time'] <- 'timestep'
+T_decision_very_warm_days_T_light_base <- T_decision_very_warm_days
+
+
+T_decision_dynamic_warm_days$ID <- paste(T_decision_dynamic_warm_days$Startweight, "-", T_decision_dynamic_warm_days$Individual)
+names(T_decision_dynamic_warm_days)[names(T_decision_dynamic_warm_days) == 'Time'] <- 'timestep'
+T_decision_dynamic_warm_days_T_light_base <- T_decision_dynamic_warm_days
+
+
+T_decision_stable_warm_days$ID <- paste(T_decision_stable_warm_days$Startweight, "-", T_decision_stable_warm_days$Individual)
+names(T_decision_stable_warm_days)[names(T_decision_stable_warm_days) == 'Time'] <- 'timestep'
+T_decision_stable_warm_days_T_light_base <- T_decision_stable_warm_days
+
+
+T_decision_dynamic_cold_days$ID <- paste(T_decision_dynamic_cold_days$Startweight, "-", T_decision_dynamic_cold_days$Individual)
+names(T_decision_dynamic_cold_days)[names(T_decision_dynamic_cold_days) == 'Time'] <- 'timestep'
+T_decision_dynamic_cold_days_T_light_base <- T_decision_dynamic_cold_days
+
+
+T_decision_stable_cold_days$ID <- paste(T_decision_stable_cold_days$Startweight, "-", T_decision_stable_cold_days$Individual)
+names(T_decision_stable_cold_days)[names(T_decision_stable_cold_days) == 'Time'] <- 'timestep'
+T_decision_stable_cold_days_T_light_base <- T_decision_stable_cold_days
+
+
+T_decision_very_cold_days$ID <- paste(T_decision_very_cold_days$Startweight, "-", T_decision_very_cold_days$Individual)
+names(T_decision_very_cold_days)[names(T_decision_very_cold_days) == 'Time'] <- 'timestep'
+T_decision_very_cold_days_T_light_base <- T_decision_very_cold_days
+
+
+all_day_types_trondheim <- rbind(T_decision_very_warm_days_T_light_base,
+                                 T_decision_dynamic_warm_days_T_light_base,
+                                 T_decision_stable_warm_days_T_light_base,
+                                 T_decision_dynamic_cold_days_T_light_base,
+                                 T_decision_stable_cold_days_T_light_base,
+                                 T_decision_very_cold_days_T_light_base)
+
+all_day_types_trondheim$Light<-"Trondheim"
+
+
+# For Nittedal
+N_decision_very_warm_days$ID <- paste(N_decision_very_warm_days$Startweight, "-", N_decision_very_warm_days$Individual)
+names(N_decision_very_warm_days)[names(N_decision_very_warm_days) == 'Time'] <- 'timestep'
+N_decision_very_warm_days_T_light_base <- N_decision_very_warm_days
+
+
+N_decision_dynamic_warm_days$ID <- paste(N_decision_dynamic_warm_days$Startweight, "-", N_decision_dynamic_warm_days$Individual)
+names(N_decision_dynamic_warm_days)[names(N_decision_dynamic_warm_days) == 'Time'] <- 'timestep'
+N_decision_dynamic_warm_days_T_light_base <- N_decision_dynamic_warm_days
+
+
+N_decision_stable_warm_days$ID <- paste(N_decision_stable_warm_days$Startweight, "-", N_decision_stable_warm_days$Individual)
+names(N_decision_stable_warm_days)[names(N_decision_stable_warm_days) == 'Time'] <- 'timestep'
+N_decision_stable_warm_days_T_light_base <- N_decision_stable_warm_days
+
+
+N_decision_dynamic_cold_days$ID <- paste(N_decision_dynamic_cold_days$Startweight, "-", N_decision_dynamic_cold_days$Individual)
+names(N_decision_dynamic_cold_days)[names(N_decision_dynamic_cold_days) == 'Time'] <- 'timestep'
+N_decision_dynamic_cold_days_T_light_base <- N_decision_dynamic_cold_days
+
+
+N_decision_stable_cold_days$ID <- paste(N_decision_stable_cold_days$Startweight, "-", N_decision_stable_cold_days$Individual)
+names(N_decision_stable_cold_days)[names(N_decision_stable_cold_days) == 'Time'] <- 'timestep'
+N_decision_stable_cold_days_T_light_base <- N_decision_stable_cold_days
+
+all_day_types_nittedal <- rbind(N_decision_very_warm_days_T_light_base,
+                                N_decision_dynamic_warm_days_T_light_base,
+                                N_decision_stable_warm_days_T_light_base,
+                                N_decision_dynamic_cold_days_T_light_base,
+                                N_decision_stable_cold_days_T_light_base)
+
+all_day_types_nittedal$Light<-"Nittedal"
+
+all_day_types_both_lights <- rbind(all_day_types_trondheim,all_day_types_nittedal)
+
+all_day_types_both_lights$time_of_day <- "Day"
+all_day_types_both_lights$time_of_day <- ifelse(all_day_types_both_lights$Light=="Trondheim" & all_day_types_both_lights$timestep > 58, "Night", all_day_types_both_lights$time_of_day)
+all_day_types_both_lights$time_of_day <- ifelse(all_day_types_both_lights$Light=="Nittedal" & all_day_types_both_lights$timestep > 53, "Night", all_day_types_both_lights$time_of_day)
+
+percent_torpor_before_sunset_all_day_types <- all_day_types_both_lights %>%
+  filter(timestep == 2)
+
+all_day_types_both_lights$decision <- as.factor(all_day_types_both_lights$decision)
+
+new_all_days_torpor_before_sunset <- all_day_types_both_lights %>%
+  filter(time_of_day=="Day") %>%  
+  group_by(ID,decision, day_type,Light) %>%
+  count(decision, .drop = FALSE)
+
+new_all_days_torpor_before_sunset$day_length <- ifelse(new_all_days_torpor_before_sunset$Light=="Trondheim", 57, 52)
+new_all_days_torpor_before_sunset$percent_activity <- new_all_days_torpor_before_sunset$n*100/new_all_days_torpor_before_sunset$day_length
+
+new_percent_torpor_all_days <- subset(new_all_days_torpor_before_sunset,decision=="Torpor")
+
+percent_torpor_before_sunset_all_day_types <- percent_torpor_before_sunset_all_day_types[,c(2:3,7:11)]
+new_percent_torpor_all_days <- new_percent_torpor_all_days[,c(1:4,7)]
+
+percent_torpor_before_sunset_all_day_types_2 <- left_join(percent_torpor_before_sunset_all_day_types,new_percent_torpor_all_days)
+
+percent_torpor_before_sunset_all_day_types_2$day_type <- factor(percent_torpor_before_sunset_all_day_types_2$day_type, levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+
+my_colors <- c("lightsteelblue","lightsteelblue1","lightsteelblue1", "pink", "pink", "pink")
+
+my_x_title <- expression(paste("Energy reserves (g) at ", italic("t"), "=1"))
+
+daily_torpor_plot <- ggplot(subset(percent_torpor_before_sunset_all_day_types_2,(Light=="Trondheim" | 
+                                                                                   (Light=="Nittedal" & (day_type=="Stable cold" | day_type=="Dynamic cold"| day_type=="Stable warm" | day_type=="Dynamic warm" | day_type=="Very warm")))), 
+                            aes(x = fat_reserves, y = percent_activity, colour=Light)) +
+  theme_classic()+
+  facet_wrap(~day_type,nrow=1)+
+  geom_rect(data = percent_torpor_before_sunset_all_day_types_2[c(1,3000,5500,7500,9500,12000),],aes(fill = day_type), xmin = -Inf,xmax = Inf,
+            ymin = -Inf,ymax = Inf, colour="black", alpha=c(0.9,0.5,0.2,0.3,0.7,0.8))+
+  scale_fill_manual(values = my_colors)+
+  scale_alpha_identity()+
+  scale_colour_manual(values = c("black", "gray50"))+
+  #geom_point(alpha = 0.01, size = 0.3)+
+  geom_point(alpha = 1, size = 0.3)+
+  scale_y_continuous(limits=c(0,101),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(limits=c(0.5,2.2),breaks=seq(0.5,2.5,0.5),expand = c(0,0), labels=c("","1.0","","2.0",""))+
+  labs(y="Percent torpid at day", x=my_x_title)+
+  guides(fill="none")+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        legend.position = "top",
+        legend.title = element_blank())+
+  stat_smooth(data = subset(percent_torpor_before_sunset_all_day_types_2, (day_type =="Stable warm" | day_type =="Dynamic warm" | day_type =="Very warm") & percent_activity < 100), 
+              method = "lm", formula = y ~ x, se=F, size=1)
+
+legend_1 = gtable_filter(ggplotGrob(daily_torpor_plot), "guide-box") 
+legend_1 <-as.ggplot(legend_1)
+
+daily_torpor_plot<-daily_torpor_plot+guides(colour="none")
+
+torpor_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/sleeping_bat.png", native = TRUE)
+
+annotation_custom2 <- 
+  function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){ 
+    layer(data = data, stat = StatIdentity, position = PositionIdentity, geom = ggplot2:::GeomCustomAnn,
+          inherit.aes = TRUE, params = list(grob = grob, 
+                                            xmin = xmin, xmax = xmax, 
+                                            ymin = ymin, ymax = ymax))}
+
+torpor_image = annotation_custom2(rasterGrob(torpor_image, interpolate=TRUE), 
+                                  xmin=0.25, xmax=1.7, ymin=70, ymax=98.5, 
+                                  data=subset(percent_torpor_before_sunset_all_day_types_2,day_type=="Very cold")[1,])
+
+daily_torpor_plot_new <- daily_torpor_plot + torpor_image
+
+plot_3 <- grid.arrange(daily_torpor_plot_new, legend_1_new,ncol=1,layout_matrix=rbind
+                       (c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(NA,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2)))
+
+ggsave("Fig. 3.jpg", plot = plot_3, width = 6.42, height = 2.62, units = "in", dpi = 300)
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 2.jpeg", plot = plot_3, width = 180, height = 70, units="mm", dpi = 1000, bg="white")
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 2.pdf", plot = plot_3, width = 180, height = 70, units="mm", dpi = 1000)
+
+
+#### Figure 3 ####
+# Assumes that codes to prepare datasets for figure 2 have been run earlier
+
+percent_activity_after_sunset_all_day_types <- all_day_types_both_lights %>%
+  filter(ifelse(Light=="Trondheim",
+                timestep == 58,timestep == 55))
+
+all_day_types_both_lights$decision <- as.factor(all_day_types_both_lights$decision)
+all_day_types_both_lights$day_type <- as.factor(all_day_types_both_lights$day_type)
+all_day_types_both_lights$Light <- as.factor(all_day_types_both_lights$Light)
+
+new_all_days_activity_after_sunset <- all_day_types_both_lights %>%
+  filter(time_of_day=="Night") %>%  
+  group_by(ID,decision, day_type,Light) %>%
+  count(decision, .drop = FALSE)
+
+new_all_days_activity_after_sunset$night_length <- ifelse(new_all_days_activity_after_sunset$Light=="Trondheim", 14, 19)
+new_all_days_activity_after_sunset$percent_activity <- new_all_days_activity_after_sunset$n*100/new_all_days_activity_after_sunset$night_length
+
+new_percent_torpor_all_days_night <- subset(new_all_days_activity_after_sunset,decision=="Torpor")
+new_percent_rest_all_days_night <- subset(new_all_days_activity_after_sunset,decision=="Rest")
+new_percent_forage_all_days_night <- subset(new_all_days_activity_after_sunset,decision=="Forage")
+
+percent_activity_after_sunset_all_day_types <- percent_activity_after_sunset_all_day_types[,c(2:3,7:11)]
+new_percent_torpor_all_days_night <- new_percent_torpor_all_days_night[,c(1:4,7)]
+new_percent_rest_all_days_night <- new_percent_rest_all_days_night[,c(1:4,7)]
+new_percent_forage_all_days_night <- new_percent_forage_all_days_night[,c(1:4,7)]
+
+percent_torpor_night_all_day_types <- left_join(percent_activity_after_sunset_all_day_types,new_percent_torpor_all_days_night)
+percent_rest_night_all_day_types <- left_join(percent_activity_after_sunset_all_day_types,new_percent_rest_all_days_night)
+percent_forage_night_all_day_types <- left_join(percent_activity_after_sunset_all_day_types,new_percent_forage_all_days_night)
+
+percent_torpor_night_all_day_types$day_type <- factor(percent_torpor_night_all_day_types$day_type, levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+percent_rest_night_all_day_types$day_type <- factor(percent_rest_night_all_day_types$day_type, levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+percent_forage_night_all_day_types$day_type <- factor(percent_forage_night_all_day_types$day_type, levels = c("Very cold","Stable cold","Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+
+forage_plot1 <- ggplot(subset(percent_forage_night_all_day_types,(Light=="Trondheim" | 
+                                                                    (Light=="Nittedal" & (day_type=="Stable cold" | day_type=="Dynamic cold"| day_type=="Stable warm" | day_type=="Dynamic warm" | day_type=="Very warm")))), 
+                       aes(x = fat_reserves, y = percent_activity, colour=Light)) +
+  theme_classic()+
+  facet_wrap(~day_type, nrow=1)+
+  geom_rect(data = percent_forage_night_all_day_types[c(1,3000,5500,7500,9500,12000),],colour="black", aes(fill = day_type), xmin = -Inf,xmax = Inf,
+            ymin = -Inf,ymax = Inf,alpha=c(0.9,0.5,0.2,0.3,0.7,0.8)) +
+  scale_fill_manual(values = my_colors)+
+  scale_colour_manual(values = c("black", "gray50"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,50),expand = c(0,0))+
+  scale_x_continuous(limits=c(0.1,2.2),breaks=seq(0.5,2,1),expand = c(0,0))+
+  labs(y="Percent foraging")+
+  guides(colour="none")+
+  guides(fill="none")+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank())+
+  stat_smooth(data = subset(percent_forage_night_all_day_types, (day_type =="Dynamic cold" | day_type =="Stable warm" | day_type =="Dynamic warm" | day_type =="Very warm")),
+              method = "lm", formula = y ~ poly(x,2), se=F, size=1)+
+  geom_point(alpha = 1, size = 0.3)
+
+
+torpor_plot2 <- ggplot(subset(percent_torpor_night_all_day_types,(Light=="Trondheim" | 
+                                                                    (Light=="Nittedal" & (day_type=="Stable cold" | day_type=="Dynamic cold"| day_type=="Stable warm" | day_type=="Dynamic warm" | day_type=="Very warm")))), 
+                       aes(x = fat_reserves, y = percent_activity, colour=Light)) +
+  theme_classic()+
+  facet_wrap(~day_type, nrow=1)+
+  geom_rect(data = percent_torpor_night_all_day_types[c(1,3000,5500,7500,9500,12000),],colour="black",aes(fill = day_type), xmin = -Inf,xmax = Inf,
+            ymin = -Inf,ymax = Inf,alpha=c(0.9,0.5,0.2,0.3,0.7,0.8)) +
+  scale_fill_manual(values = my_colors)+
+  scale_colour_manual(values = c("black", "gray50"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,50),expand = c(0,0))+
+  scale_x_continuous(limits=c(0.1,2.2),breaks=seq(0.5,2,1),expand = c(0,0))+
+  labs(y="Percent torpid")+
+  guides(colour="none")+
+  guides(fill="none")+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        strip.background = element_blank(),
+        strip.text.x = element_blank())+
+  stat_smooth(data = subset(percent_torpor_night_all_day_types, (day_type =="Dynamic cold" | day_type =="Stable warm" | day_type =="Dynamic warm" | day_type =="Very warm")),
+              method = "lm", formula = y ~ poly(x,2), se=F, size=1)+
+  geom_point(alpha = 1, size = 0.3)
+
+
+rest_plot3 <- ggplot(subset(percent_rest_night_all_day_types,(Light=="Trondheim" | 
+                                                                (Light=="Nittedal" & (day_type=="Stable cold" | day_type=="Dynamic cold"| day_type=="Stable warm" | day_type=="Dynamic warm" | day_type=="Very warm")))), 
+                     aes(x = fat_reserves, y = percent_activity, colour=Light)) +
+  theme_classic()+
+  scale_fill_manual(values = my_colors)+
+  geom_rect(data = percent_rest_night_all_day_types[c(1,3000,5500,7500,9500,12000),], colour="black",aes(fill = day_type), xmin = -Inf,xmax = Inf,
+            ymin = -Inf,ymax = Inf,alpha=c(0.9,0.5,0.2,0.3,0.7,0.8)) +
+  facet_wrap(~day_type, nrow=1)+
+  scale_colour_manual(values = c("black", "gray50"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,50),expand = c(0,0))+
+  scale_x_continuous(limits=c(0.1,2.2),breaks=seq(0.5,2,1),expand = c(0,0))+
+  labs(x="Energy reserves (g) before sunset", y="Percent resting")+
+  guides(colour="none")+
+  guides(fill="none")+
+  theme(axis.text.y = element_text(colour = "black"),
+        axis.title.x = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        strip.background = element_blank(),
+        strip.text.x = element_blank())+
+  stat_smooth(data = subset(percent_rest_night_all_day_types, (day_type =="Stable warm" | day_type =="Dynamic warm" | day_type =="Very warm")),
+              method = "lm", formula = y ~ poly(x,2), se=F, size=1)+
+  geom_point(alpha = 1, size = 0.3)
+  #geom_point(alpha = 0.2, size = 0.3)
+
+
+foraging_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/flying_bat.png", native = TRUE)
+rest_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/resting_bat.png", native = TRUE)
+torpor_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/sleeping_bat.png", native = TRUE)
+
+annotation_custom2 <- 
+  function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){ 
+    layer(data = data, stat = StatIdentity, position = PositionIdentity, geom = ggplot2:::GeomCustomAnn,
+          inherit.aes = TRUE, params = list(grob = grob, 
+                                            xmin = xmin, xmax = xmax, 
+                                            ymin = ymin, ymax = ymax))}
+
+rest_plot3_image = annotation_custom2(rasterGrob(rest_image, interpolate=TRUE), 
+                                      xmin=-1.2, xmax=2.4, ymin=52, ymax=98, 
+                                      data=percent_rest_night_all_day_types[12000,])
+
+rest_plot3_new <- rest_plot3 + rest_plot3_image
+
+torpor_plot2_image = annotation_custom2(rasterGrob(torpor_image, interpolate=TRUE), 
+                                        xmin=-1.3, xmax=2.3, ymin=50, ymax=98,
+                                        data=percent_torpor_night_all_day_types[12000,])
+
+torpor_plot2_new <- torpor_plot2 + torpor_plot2_image
+
+forage_plot1_image = annotation_custom2(rasterGrob(foraging_image, interpolate=TRUE), 
+                                        xmin=-0.2, xmax=2.1, ymin=70, ymax=98, 
+                                        data=percent_forage_night_all_day_types[12000,])
+
+forage_plot1_new <- forage_plot1 + forage_plot1_image
+
+legend_1_new <- legend_1 + theme(plot.margin = margin(0,0,0.3,0, "cm"))
+
+plot_4 <- grid.arrange(forage_plot1_new, torpor_plot2_new, rest_plot3_new, legend_1_new,ncol=1,layout_matrix=rbind
+                       (c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3),
+                         c(NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA),
+                         c(NA,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4)))
+
+ggsave("Fig. 4.jpg", plot = plot_4, width = 7.55, height = 6.33, units = "in", dpi = 300)
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 3.jpeg", plot = plot_4, width = 180, height = 150, units="mm", dpi = 900, bg="white")
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 3.pdf", plot = plot_4, width = 180, height = 110, units="mm", dpi = 1000)
+
+
+#### Figure S5.1 ####
+### Empirical data ###
+
+# Contact corresponding author for dataset
+Tskin_enil <- read.table("/Users/mariaasfjelldal/Desktop/PHD/Stochastic dynamic modelling/Data/Empirical_Tskin.csv", header=T, sep=",")
+
+Tskin_enil$Activity_new <- as.factor(Tskin_enil$Activity_new)
+
+Tskin_enil$Overall_activity <- NA
+Tskin_enil$Overall_activity <- ifelse(Tskin_enil$Activity_new == "Torpor" | Tskin_enil$Activity_new == "Torpor_entry" | Tskin_enil$Activity_new == "Torpor_exit",
+                                      "Torpor", Tskin_enil$Overall_activity)
+Tskin_enil$Overall_activity <- ifelse(Tskin_enil$Activity_new == "Active",
+                                      "Active", Tskin_enil$Overall_activity)
+Tskin_enil$Overall_activity <- ifelse(Tskin_enil$Activity_new == "Foraging",
+                                      "Foraging", Tskin_enil$Overall_activity)
+Tskin_enil$Overall_activity <- ifelse(Tskin_enil$Activity_new == "UK" | Tskin_enil$Activity_new == "",
+                                      "UK", Tskin_enil$Overall_activity)
+
+Tskin_enil_day <- subset(Tskin_enil,Night_Day=="Day")
+Tskin_enil_day$Overall_activity <- as.factor(Tskin_enil_day$Overall_activity)
+levels(Tskin_enil_day$Overall_activity)
+
+
+df2 <- Tskin_enil_day %>%
+  group_by(WingphotoID,Place) %>%
+  count(DayNumber)
+
+colnames(df2) <- c("ID","Light","DayNumber", "Day_length")
+
+Tskin_enil_summary <- Tskin_enil_day %>%
+  group_by(WingphotoID,DayNumber) %>%
+  count(Overall_activity, .drop = FALSE)
+
+colnames(Tskin_enil_summary) <- c("ID", "DayNumber", "Activity", "Count")
+
+Tskin_enil_summary <- left_join(Tskin_enil_summary, df2, by=c("ID", "DayNumber"))
+Tskin_enil_summary$Percent <- Tskin_enil_summary$Count*100/Tskin_enil_summary$Day_length
+
+Tskin_enil_summary_new <- subset(Tskin_enil_summary,Activity =="Torpor")
+
+df2$Day_length<-NULL
+
+Tskin_enil_summary_new_2 <- left_join(df2,Tskin_enil_summary_new, by=c("ID", "DayNumber","Light"))
+
+Tskin_enil_summary_new_2$Day_length<-NULL
+Tskin_enil_summary_new_2$Count<-NULL
+
+Daily_Ta <- Tskin_enil %>%
+  group_by(WingphotoID,DayNumber) %>%
+  summarize(MeanTa = mean(Ta, na.rm = TRUE),
+            MinTa = min(Ta, na.rm = TRUE),
+            MaxTa = max(Ta, na.rm = TRUE))
+
+colnames(Daily_Ta) <- c("ID", "DayNumber", "MeanTa", "MinTa", "MaxTa")
+
+Daily_Ta$Ta_range <- Daily_Ta$MaxTa-Daily_Ta$MinTa
+
+Daily_Ta$Weather <- NA
+
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range<2.6 & Daily_Ta$MeanTa <= 14, "Stable cold",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range>=3 & Daily_Ta$MeanTa <= 14, "Dynamic cold",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range<6 & Daily_Ta$MeanTa > 14 & Daily_Ta$MaxTa < 23, "Stable warm",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range>=6 & (Daily_Ta$MinTa > 11 | Daily_Ta$MeanTa > 14), "Dynamic warm",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$MeanTa > 20 & Daily_Ta$MaxTa > 26, "Very warm",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$MinTa < 6 & Daily_Ta$MeanTa < 9 & Daily_Ta$MaxTa < 13, "Very cold",Daily_Ta$Weather)
+
+Tskin_enil_summary_final <- left_join(Tskin_enil_summary_new_2, Daily_Ta, by=c("ID", "DayNumber"))
+
+Tskin_enil_summary_final$Weather <- factor(Tskin_enil_summary_final$Weather, levels = c("Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+
+Day_time_Ta <- Tskin_enil_day %>%
+  group_by(WingphotoID,DayNumber) %>%
+  summarize(MeanTa = mean(Ta, na.rm = TRUE))
+
+colnames(Day_time_Ta) <- c("ID", "DayNumber", "MeanTa_day")
+
+Tskin_enil_summary_final <- left_join(Tskin_enil_summary_final, Day_time_Ta, by=c("ID", "DayNumber"))
+
+
+### Model predictions ###
+
+# For Trondheim
+
+T_decision_all_dataset <- decision_all[,1:nb_indiv_forward,1:2160] 
+
+T_decision_all_dataset_reshaped<-reshape2::melt(T_decision_all_dataset[,])
+colnames(T_decision_all_dataset_reshaped)<-c("Individual","Time","value")
+T_decision_all_dataset_reshaped$decision<-NA
+
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==3)]<-"Forage"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==1)]<-"Torpor"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==2)]<-"Rest"
+
+T_decision_all_dataset_reshaped$day<-rep(seq(1,30,length.out=30),each=nb_indiv_forward*72) #for 200 individuals
+T_decision_all_dataset_reshaped$timestep<-NA
+
+for (day in T_decision_all_dataset_reshaped) {
+  timestep<-rep(seq(1,72,length.out=72),each=nb_indiv_forward) # for 200 individuals
+  T_decision_all_dataset_reshaped[,6] <- timestep
+}
+
+T_fat_state_all_dataset <- fat_state_forward_all[,1:nb_indiv_forward,1:2160] # for 200 individuals
+T_fat_state_all_dataset_reshaped<-reshape2::melt(T_fat_state_all_dataset[,])
+
+T_decision_all_dataset_reshaped$fat_reserves<-T_fat_state_all_dataset_reshaped$value
+
+T_day_type_all_dataset <- day_type_all[1:nb_indiv_forward,1:2160]
+T_day_type_all_dataset_reshaped<-reshape2::melt(T_day_type_all_dataset[,])
+T_decision_all_dataset_reshaped$day_type<-T_day_type_all_dataset_reshaped$value
+
+T_decision_all_dataset_reshaped<-na.omit(T_decision_all_dataset_reshaped)
+
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==1,"Very warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==2,"Dynamic warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==3,"Stable warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==4,"Dynamic cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==5,"Stable cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==6,"Very cold",T_decision_all_dataset_reshaped$day_type)
+
+T_decision_all_dataset_reshaped <- subset(T_decision_all_dataset_reshaped,fat_reserves>0) # Removing dead individuals
+
+T_decision_all_dataset_reshaped$decision <- factor(T_decision_all_dataset_reshaped$decision, levels = c("Torpor","Rest","Forage"))
+
+T_decision_very_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very warm")
+T_decision_dynamic_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic warm")
+T_decision_stable_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable warm")
+T_decision_dynamic_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic cold")
+T_decision_stable_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable cold")
+T_decision_very_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very cold")
+
+T_decision_dynamic_cold_days$ID_day <- paste(T_decision_dynamic_cold_days$Individual, "_", T_decision_dynamic_cold_days$day)
+T_decision_stable_warm_days$ID_day <- paste(T_decision_stable_warm_days$Individual, "_", T_decision_stable_warm_days$day)
+T_decision_dynamic_warm_days$ID_day <- paste(T_decision_dynamic_warm_days$Individual, "_", T_decision_dynamic_warm_days$day)
+T_decision_very_warm_days$ID_day <- paste(T_decision_very_warm_days$Individual, "_", T_decision_very_warm_days$day)
+
+# If keeping the sample sizes equal between model simulations and empirical data
+# set.seed(3)
+#sample_ID_T_dynamic_cold_days <- sample(T_decision_dynamic_cold_days$ID_day, 4, replace = FALSE, prob = NULL)
+#set.seed(4)
+#sample_ID_T_stable_warm_days <- sample(T_decision_stable_warm_days$ID_day, 3, replace = FALSE, prob = NULL)
+#set.seed(5)
+#sample_ID_T_dynamic_warm_days <- sample(T_decision_dynamic_warm_days$ID_day, 13, replace = FALSE, prob = NULL)
+#set.seed(6)
+#sample_ID_T_very_warm_days <- sample(T_decision_very_warm_days$ID_day, 12, replace = FALSE, prob = NULL)
+
+#T_decision_dynamic_cold_days_sampled <- T_decision_dynamic_cold_days[T_decision_dynamic_cold_days$ID_day %in% sample_ID_T_dynamic_cold_days, ]
+#T_decision_stable_warm_days_sampled <- T_decision_stable_warm_days[T_decision_stable_warm_days$ID_day %in% sample_ID_T_stable_warm_days, ]
+#T_decision_dynamic_warm_days_sampled <- T_decision_dynamic_warm_days[T_decision_dynamic_warm_days$ID_day %in% sample_ID_T_dynamic_warm_days, ]
+#T_decision_very_warm_days_sampled <- T_decision_very_warm_days[T_decision_very_warm_days$ID_day %in% sample_ID_T_very_warm_days, ]
+
+#T_ALL_days_sampled <- rbind(T_decision_dynamic_cold_days_sampled,T_decision_stable_warm_days_sampled,T_decision_dynamic_warm_days_sampled,T_decision_very_warm_days_sampled)
+
+# Sampling 50 simulations per day type observation
+
+test1 <- T_decision_dynamic_cold_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test2 <- T_decision_stable_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test3 <- T_decision_dynamic_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test4 <- T_decision_very_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+set.seed(7)
+sample_ID_T_dynamic_cold_days2 <- sample(test1$ID_day, 200, replace = FALSE, prob = NULL)
+set.seed(8)
+sample_ID_T_stable_warm_days2 <- sample(test2$ID_day, 150, replace = FALSE, prob = NULL)
+set.seed(9)
+sample_ID_T_dynamic_warm_days2 <- sample(test3$ID_day, 650, replace = FALSE, prob = NULL)
+set.seed(10)
+sample_ID_T_very_warm_days2 <- sample(test4$ID_day, 600, replace = FALSE, prob = NULL)
+
+
+T_decision_dynamic_cold_days_sampled <- T_decision_dynamic_cold_days[T_decision_dynamic_cold_days$ID_day %in% sample_ID_T_dynamic_cold_days2, ]
+T_decision_stable_warm_days_sampled <- T_decision_stable_warm_days[T_decision_stable_warm_days$ID_day %in% sample_ID_T_stable_warm_days2, ]
+T_decision_dynamic_warm_days_sampled <- T_decision_dynamic_warm_days[T_decision_dynamic_warm_days$ID_day %in% sample_ID_T_dynamic_warm_days2, ]
+T_decision_very_warm_days_sampled <- T_decision_very_warm_days[T_decision_very_warm_days$ID_day %in% sample_ID_T_very_warm_days2, ]
+
+T_ALL_days_sampled <- rbind(T_decision_dynamic_cold_days_sampled,T_decision_stable_warm_days_sampled,T_decision_dynamic_warm_days_sampled,T_decision_very_warm_days_sampled)
+
+
+# For Nittedal
+
+T_decision_all_dataset <- decision_all[,1:nb_indiv_forward,1:2160] 
+
+T_decision_all_dataset_reshaped<-reshape2::melt(T_decision_all_dataset[,])
+colnames(T_decision_all_dataset_reshaped)<-c("Individual","Time","value")
+T_decision_all_dataset_reshaped$decision<-NA
+
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==3)]<-"Forage"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==1)]<-"Torpor"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==2)]<-"Rest"
+
+T_decision_all_dataset_reshaped$day<-rep(seq(1,30,length.out=30),each=nb_indiv_forward*72) #for 200 individuals
+T_decision_all_dataset_reshaped$timestep<-NA
+
+for (day in T_decision_all_dataset_reshaped) {
+  timestep<-rep(seq(1,72,length.out=72),each=nb_indiv_forward) # for 200 individuals
+  T_decision_all_dataset_reshaped[,6] <- timestep
+}
+
+T_fat_state_all_dataset <- fat_state_forward_all[,1:nb_indiv_forward,1:2160] # for 200 individuals
+T_fat_state_all_dataset_reshaped<-reshape2::melt(T_fat_state_all_dataset[,])
+
+T_decision_all_dataset_reshaped$fat_reserves<-T_fat_state_all_dataset_reshaped$value
+
+T_day_type_all_dataset <- day_type_all[1:nb_indiv_forward,1:2160]
+T_day_type_all_dataset_reshaped<-reshape2::melt(T_day_type_all_dataset[,])
+T_decision_all_dataset_reshaped$day_type<-T_day_type_all_dataset_reshaped$value
+
+T_decision_all_dataset_reshaped<-na.omit(T_decision_all_dataset_reshaped)
+
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==1,"Very warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==2,"Dynamic warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==3,"Stable warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==4,"Dynamic cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==5,"Stable cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==6,"Very cold",T_decision_all_dataset_reshaped$day_type)
+
+T_decision_all_dataset_reshaped <- subset(T_decision_all_dataset_reshaped,fat_reserves>0) # Removing dead individuals
+
+T_decision_all_dataset_reshaped$decision <- factor(T_decision_all_dataset_reshaped$decision, levels = c("Torpor","Rest","Forage"))
+
+N_decision_very_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very warm")
+N_decision_dynamic_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic warm")
+N_decision_stable_warm_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable warm")
+N_decision_dynamic_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Dynamic cold")
+N_decision_stable_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Stable cold")
+N_decision_very_cold_days <- subset(T_decision_all_dataset_reshaped,day_type=="Very cold")
+
+N_decision_very_warm_days$ID_day <- paste(N_decision_very_warm_days$Individual, "_", N_decision_very_warm_days$day)
+N_decision_dynamic_warm_days$ID_day <- paste(N_decision_dynamic_warm_days$Individual, "_", N_decision_dynamic_warm_days$day)
+N_decision_dynamic_cold_days$ID_day <- paste(N_decision_dynamic_cold_days$Individual, "_", N_decision_dynamic_cold_days$day)
+
+# If keeping the same sample sizes for simulations and empirical data
+#set.seed(11)
+#sample_ID_N_very_warm_days <- sample(N_decision_very_warm_days$ID_day, 1, replace = FALSE, prob = NULL)
+#set.seed(12)
+#sample_ID_N_dynamic_warm_days <- sample(N_decision_dynamic_warm_days$ID_day, 5, replace = FALSE, prob = NULL)
+#set.seed(13)
+#sample_ID_N_dynamic_cold_days <- sample(N_decision_dynamic_cold_days$ID_day, 1, replace = FALSE, prob = NULL)
+
+#N_decision_very_warm_days_sampled <- N_decision_very_warm_days[N_decision_very_warm_days$ID_day %in% sample_ID_N_very_warm_days, ]
+#N_decision_dynamic_warm_days_sampled <- N_decision_dynamic_warm_days[N_decision_dynamic_warm_days$ID_day %in% sample_ID_N_dynamic_warm_days, ]
+#N_decision_dynamic_cold_days_sampled <- N_decision_dynamic_cold_days[N_decision_dynamic_cold_days$ID_day %in% sample_ID_N_dynamic_cold_days, ]
+
+#N_ALL_days_sampled <- rbind(N_decision_very_warm_days_sampled,N_decision_dynamic_warm_days_sampled,N_decision_dynamic_cold_days_sampled)
+
+# Sampling 50 simulations per day type observation
+
+test5 <- N_decision_dynamic_cold_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test6 <- N_decision_dynamic_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test7 <- N_decision_very_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+set.seed(14)
+sample_ID_N_dynamic_cold_days2 <- sample(test5$ID_day, 50, replace = FALSE, prob = NULL)
+set.seed(15)
+sample_ID_N_dynamic_warm_days2 <- sample(test6$ID_day, 250, replace = FALSE, prob = NULL)
+set.seed(16)
+sample_ID_N_very_warm_days2 <- sample(test7$ID_day, 50, replace = FALSE, prob = NULL)
+
+N_decision_very_warm_days_sampled <- N_decision_very_warm_days[N_decision_very_warm_days$ID_day %in% sample_ID_N_very_warm_days2, ]
+N_decision_dynamic_warm_days_sampled <- N_decision_dynamic_warm_days[N_decision_dynamic_warm_days$ID_day %in% sample_ID_N_dynamic_warm_days2, ]
+N_decision_dynamic_cold_days_sampled <- N_decision_dynamic_cold_days[N_decision_dynamic_cold_days$ID_day %in% sample_ID_N_dynamic_cold_days2, ]
+
+N_ALL_days_sampled <- rbind(N_decision_very_warm_days_sampled,N_decision_dynamic_warm_days_sampled,N_decision_dynamic_cold_days_sampled)
+
+
+
+# Combine model-datasets
+
+T_ALL_days_sampled$Place <- "Trondheim"
+N_ALL_days_sampled$Place <- "Nittedal"
+
+T_ALL_days_sampled$Night_Day <- ifelse(T_ALL_days_sampled$timestep < 61, "Day", "Night")
+N_ALL_days_sampled$Night_Day <- ifelse(N_ALL_days_sampled$timestep < 57, "Day", "Night")
+
+BOTH_ALL_days_sampled <- rbind(T_ALL_days_sampled,N_ALL_days_sampled)
+
+daytime_BOTH_ALL_days_sampled <- subset(BOTH_ALL_days_sampled,Night_Day=="Day")
+daytime_BOTH_ALL_days_sampled$decision <- as.factor(daytime_BOTH_ALL_days_sampled$decision)
+
+df2 <- daytime_BOTH_ALL_days_sampled %>%
+  group_by(Individual,Place) %>%
+  count(day)
+
+colnames(df2) <- c("ID","Light","DayNumber", "Day_length")
+
+daytime_BOTH_ALL_days_sampled_summary_Tron <- daytime_BOTH_ALL_days_sampled %>%
+  filter(Place=="Trondheim") %>%
+  group_by(Individual,day) %>%
+  count(decision, .drop = FALSE)
+
+daytime_BOTH_ALL_days_sampled_summary_Nit <- daytime_BOTH_ALL_days_sampled %>%
+  filter(Place=="Nittedal") %>%
+  group_by(Individual,day) %>%
+  count(decision, .drop = FALSE)
+
+daytime_BOTH_ALL_days_sampled_summary_Tron$Light <- "Trondheim"
+daytime_BOTH_ALL_days_sampled_summary_Nit$Light <- "Nittedal"
+
+daytime_BOTH_ALL_days_sampled_summary <- rbind(daytime_BOTH_ALL_days_sampled_summary_Tron, daytime_BOTH_ALL_days_sampled_summary_Nit)
+
+colnames(daytime_BOTH_ALL_days_sampled_summary) <- c("ID", "DayNumber", "Activity", "Count","Light")
+names(daytime_BOTH_ALL_days_sampled_summary)
+
+daytime_BOTH_ALL_days_sampled_summary <- left_join(daytime_BOTH_ALL_days_sampled_summary, df2, by=c("ID", "DayNumber", "Light"))
+daytime_BOTH_ALL_days_sampled_summary$Percent <- daytime_BOTH_ALL_days_sampled_summary$Count*100/daytime_BOTH_ALL_days_sampled_summary$Day_length
+
+daytime_BOTH_ALL_days_sampled_summary_new <- subset(daytime_BOTH_ALL_days_sampled_summary,Activity =="Torpor")
+
+daytime_BOTH_ALL_days_sampled_summary_new$ID_day <- paste(daytime_BOTH_ALL_days_sampled_summary_new$ID, "_", daytime_BOTH_ALL_days_sampled_summary_new$DayNumber)
+
+daytime_BOTH_ALL_days_sampled_summary_new$Weather <- BOTH_ALL_days_sampled$day_type[match(daytime_BOTH_ALL_days_sampled_summary_new$ID_day,BOTH_ALL_days_sampled$ID_day)]
+
+daytime_BOTH_ALL_days_sampled_summary_new$Weather <- factor(daytime_BOTH_ALL_days_sampled_summary_new$Weather, levels = c("Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+
+daytime_BOTH_ALL_days_sampled_summary_new$MeanTa <- NA
+daytime_BOTH_ALL_days_sampled_summary_new$MeanTa <- ifelse(daytime_BOTH_ALL_days_sampled_summary_new$Weather=="Dynamic cold", 11.44,
+                                                           daytime_BOTH_ALL_days_sampled_summary_new$MeanTa)
+
+daytime_BOTH_ALL_days_sampled_summary_new$MeanTa <- ifelse(daytime_BOTH_ALL_days_sampled_summary_new$Weather=="Stable warm", 15.29,
+                                                           daytime_BOTH_ALL_days_sampled_summary_new$MeanTa)
+
+daytime_BOTH_ALL_days_sampled_summary_new$MeanTa <- ifelse(daytime_BOTH_ALL_days_sampled_summary_new$Weather=="Dynamic warm", 17.60,
+                                                           daytime_BOTH_ALL_days_sampled_summary_new$MeanTa)
+
+daytime_BOTH_ALL_days_sampled_summary_new$MeanTa <- ifelse(daytime_BOTH_ALL_days_sampled_summary_new$Weather=="Very warm", 22.53,
+                                                           daytime_BOTH_ALL_days_sampled_summary_new$MeanTa)
+
+
+# Putting it together for Fig. 5
+Tskin_enil_summary_final$Data <- "Observations"
+daytime_BOTH_ALL_days_sampled_summary_new$Data <- "Model"
+
+names(Tskin_enil_summary_final[,c(1,2,5,10,6,12)])
+names(daytime_BOTH_ALL_days_sampled_summary_new[,c(1,5,7,9,10,11)])
+
+empty_df <- data.frame(matrix(nrow = 1911, ncol = 12)) 
+colnames(empty_df) <- c("ID", "Light", "DayNumber", "Activity", "Percent", "MeanTa", "MinTa", "MaxTa", "Ta_range", "Weather", "MeanTa_day", "Data")
+
+Tskin_enil_summary_final <- rbind(Tskin_enil_summary_final,empty_df)
+
+Obs_and_Mod_daydata2 <- rbind(Tskin_enil_summary_final[,c(2,5,10,6,12)],
+                             daytime_BOTH_ALL_days_sampled_summary_new[,c(5,7,9,10,11)])
+
+Obs_and_Mod_daydata2$Light_data <- interaction(Obs_and_Mod_daydata2$Light, Obs_and_Mod_daydata2$Data)
+
+Obs_and_Mod_daydata2$Light_data <- factor(Obs_and_Mod_daydata2$Light_data, levels = c("Nittedal.Model", "Nittedal.Observations", "Trondheim.Model", "Trondheim.Observations"))
+
+
+ggplot(Obs_and_Mod_daydata, aes(x = Light_data, y = Percent, colour=Light)) +
+  facet_grid(~ Weather) +
+  theme_classic()+
+  geom_boxplot(outlier.shape = NA)+
+  geom_point(position=position_jitterdodge(), alpha=0.65,size=1.6,aes(shape=Data))+
+  scale_shape_manual(values=c(17, 16))+
+  scale_color_manual(values=c("black","gray60"))+
+  labs(y="Torpor use (%) during daytime")+
+  scale_y_continuous(limits=c(-1,101),breaks=seq(0,100,50),expand = c(0,0))+
+  scale_x_discrete(labels=c("Nittedal\nModel predictions","Nittedal\nField observations","Trondheim\nModel predictions","Trondheim\nField observations"))+
+  guides(colour="none", shape="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank())+
+  annotate("segment", x=-Inf, xend=Inf, y=-Inf, yend=-Inf)+
+  annotate("segment", x=-Inf, xend=-Inf, y=-Inf, yend=Inf)
+
+first_plot <- ggplot(Obs_and_Mod_daydata2, aes(x = Light_data, y = Percent, alpha = Data)) +
+  theme_classic()+
+  geom_boxplot(outlier.shape = NA, colour=c("black", "black", "gray60", "gray60"))+
+  geom_point(position=position_jitterdodge(),size=1.4,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.3)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black","gray60"))+
+  scale_color_manual(values=c("red","black", "red", "gray60"))+
+  scale_alpha_manual(values=c(1,1))+
+  labs(y="Torpor use (%) during daytime")+
+  scale_y_continuous(limits=c(-3,103),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_discrete(labels=c("Nittedal\nModel","Nittedal\nObservations","Trondheim\nModel","Trondheim\nObservations"))+
+  guides(colour="none", shape="none", fill="none", alpha="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.margin = margin(0.2,0.2,0.3,0.2, "cm"))+
+  annotate("text", y=90, x=-0.01, label = "(a)")+
+  coord_cartesian(xlim = c(1,4), clip = "off")
+
+extra_plot_N <- ggplot(subset(Obs_and_Mod_daydata2, Light=="Nittedal"), aes(x = MeanTa, y = Percent, alpha = Data)) +
+  theme_classic()+
+  geom_point(size=1.4,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.3)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_alpha_manual(values=c(1,1))+
+  scale_fill_manual(values=c("black","gray60"))+
+  scale_color_manual(values=c("red","black", "red", "gray60"))+
+  scale_y_continuous(limits=c(-3,103),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(breaks=seq(10,30,5),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none", alpha="none")+
+  labs(y="Torpor use (%) during daytime", x="Mean temperature", title="Nittedal")+
+  stat_smooth(data=subset(Obs_and_Mod_daydata2,Light_data=="Nittedal.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="black")+
+  stat_smooth(data=subset(Obs_and_Mod_daydata2,Light_data=="Nittedal.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  theme(axis.text.x = element_text(colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5))+
+  annotate("text", y=90, x=4, label = "(b)")+
+  coord_cartesian(xlim = c(8,27), clip = "off")
+
+extra_plot_T <- ggplot(subset(Obs_and_Mod_daydata2, Light=="Trondheim"), aes(x = MeanTa, y = Percent, alpha = Data)) +
+  theme_classic()+
+  geom_point(size=1.4,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.3)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_alpha_manual(values=c(1,1))+
+  scale_fill_manual(values=c("gray60"))+
+  scale_color_manual(values=c("red", "gray60"))+
+  scale_y_continuous(limits=c(-3,103),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(limits=c(8,27), breaks=seq(10,30,5),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none", alpha="none")+
+  labs(y="Torpor use (%) during daytime", x="Mean temperature", title="Trondheim")+
+  stat_smooth(data=subset(Obs_and_Mod_daydata2,Light_data=="Trondheim.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="gray60")+
+  stat_smooth(data=subset(Obs_and_Mod_daydata2,Light_data=="Trondheim.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour="black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))
+
+extra_plot_both <- grid.arrange(extra_plot_N,extra_plot_T, nrow=1, bottom="Mean temperature")
+
+torpor_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/sleeping_bat.png", native = TRUE)
+
+annotation_custom2 <- 
+  function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){ 
+    layer(data = data, stat = StatIdentity, position = PositionIdentity, geom = ggplot2:::GeomCustomAnn,
+          inherit.aes = TRUE, params = list(grob = grob, 
+                                            xmin = xmin, xmax = xmax, 
+                                            ymin = ymin, ymax = ymax))}
+
+torpor_plot_day_image = annotation_custom2(rasterGrob(torpor_image, interpolate=TRUE), 
+                                           xmin=-0.2, xmax=1.5, ymin=74, ymax=102, 
+                                           data=Obs_and_Mod_daydata2)
+
+first_plot_new <- first_plot + torpor_plot_day_image
+
+day_torpor_plot <- as.ggplot(grid.arrange(first_plot_new,extra_plot_both, left="Torpor use (%) during day-time", ncol=1))
+
+ggsave("Fig. S5.1_new.jpg", plot = day_torpor_plot, width = 3.53, height = 4.55, units = "in", dpi = 300)
+
+
+# Performing Welch t-test
+T_obs_day <- subset(Obs_and_Mod_daydata2,Light_data=="Trondheim.Observations") 
+T_model_day <- subset(Obs_and_Mod_daydata2,Light_data=="Trondheim.Model")
+
+t.test(T_obs_day$Percent, T_model_day$Percent)
+
+summary(T_obs_day$Percent)
+summary(T_model_day$Percent)
+
+
+N_obs_day <- subset(Obs_and_Mod_daydata2,Light_data=="Nittedal.Observations") 
+N_model_day <- subset(Obs_and_Mod_daydata2,Light_data=="Nittedal.Model")
+
+t.test(N_obs_day$Percent, N_model_day$Percent)
+
+summary(N_obs_day$Percent)
+summary(N_model_day$Percent)
+
+
+#### Figure 4 ####
+# Assumes codes for creating datasets for Fig. S5.1 have been run previously
+
+# For empirical data #
+
+Tskin_enil_night <- subset(Tskin_enil,Night_Day=="Night")
+Tskin_enil_night$Overall_activity <- as.factor(Tskin_enil_night$Overall_activity)
+levels(Tskin_enil_night$Overall_activity)
+
+df2 <- Tskin_enil_night %>%
+  group_by(WingphotoID,Place) %>%
+  count(DayNumber)
+
+colnames(df2) <- c("ID","Light","DayNumber", "Day_length")
+
+Tskin_enil_summary_night2 <- Tskin_enil_night %>%
+  group_by(WingphotoID,DayNumber) %>%
+  count(Overall_activity, .drop = FALSE)
+
+colnames(Tskin_enil_summary_night2) <- c("ID", "DayNumber", "Activity", "Count")
+names(Tskin_enil_summary_night2)
+
+Tskin_enil_summary_night2 <- left_join(Tskin_enil_summary_night2, df2, by=c("ID", "DayNumber"))
+Tskin_enil_summary_night2$Percent <- Tskin_enil_summary_night2$Count*100/Tskin_enil_summary_night2$Day_length
+
+Tskin_enil_summary_night_torpor <- subset(Tskin_enil_summary_night2,Activity =="Torpor")
+Tskin_enil_summary_night_rest <- subset(Tskin_enil_summary_night2,Activity =="Active")
+Tskin_enil_summary_night_forage <- subset(Tskin_enil_summary_night2,Activity =="Foraging")
+
+Daily_Ta <- Tskin_enil %>%
+  group_by(WingphotoID,DayNumber) %>%
+  summarize(MeanTa = mean(Ta, na.rm = TRUE),
+            MinTa = min(Ta, na.rm = TRUE),
+            MaxTa = max(Ta, na.rm = TRUE))
+
+colnames(Daily_Ta) <- c("ID", "DayNumber", "MeanTa", "MinTa", "MaxTa")
+
+Daily_Ta$Ta_range <- Daily_Ta$MaxTa-Daily_Ta$MinTa
+
+Daily_Ta$Weather <- NA
+
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range<2.6 & Daily_Ta$MeanTa <= 14, "Stable cold",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range>=3 & Daily_Ta$MeanTa <= 14, "Dynamic cold",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range<6 & Daily_Ta$MeanTa > 14 & Daily_Ta$MaxTa < 23, "Stable warm",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$Ta_range>=6 & (Daily_Ta$MinTa > 11 | Daily_Ta$MeanTa > 14), "Dynamic warm",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$MeanTa > 20 & Daily_Ta$MaxTa > 26, "Very warm",Daily_Ta$Weather)
+Daily_Ta$Weather <- ifelse(Daily_Ta$MinTa < 6 & Daily_Ta$MeanTa < 9 & Daily_Ta$MaxTa < 13, "Very cold",Daily_Ta$Weather)
+
+Tskin_enil_summary_night_torpor_final <- left_join(Tskin_enil_summary_night_torpor, Daily_Ta, by=c("ID", "DayNumber"))
+Tskin_enil_summary_night_rest_final <- left_join(Tskin_enil_summary_night_rest, Daily_Ta, by=c("ID", "DayNumber"))
+Tskin_enil_summary_night_forage_final <- left_join(Tskin_enil_summary_night_forage, Daily_Ta, by=c("ID", "DayNumber"))
+
+Tskin_enil_summary_night_torpor_final$Weather <- factor(Tskin_enil_summary_night_torpor_final$Weather, levels = c("Stable cold", "Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+Tskin_enil_summary_night_rest_final$Weather <- factor(Tskin_enil_summary_night_rest_final$Weather, levels = c("Stable cold", "Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+Tskin_enil_summary_night_forage_final$Weather <- factor(Tskin_enil_summary_night_forage_final$Weather, levels = c("Stable cold", "Dynamic cold", "Stable warm", "Dynamic warm", "Very warm"))
+
+Night_time_Ta <- Tskin_enil_night %>%
+  group_by(WingphotoID,DayNumber) %>%
+  summarize(MeanTa = mean(Ta, na.rm = TRUE))
+
+colnames(Night_time_Ta) <- c("ID", "DayNumber", "MeanTa_night")
+
+Tskin_enil_summary_night_torpor_final <- left_join(Tskin_enil_summary_night_torpor_final, Night_time_Ta, by=c("ID", "DayNumber"))
+Tskin_enil_summary_night_rest_final <- left_join(Tskin_enil_summary_night_rest_final, Night_time_Ta, by=c("ID", "DayNumber"))
+Tskin_enil_summary_night_forage_final <- left_join(Tskin_enil_summary_night_forage_final, Night_time_Ta, by=c("ID", "DayNumber"))
+
+# For model predicitons #
+
+T_decision_stable_cold_days$ID_day <- paste(T_decision_stable_cold_days$Individual, "_", T_decision_stable_cold_days$day)
+T_decision_dynamic_cold_days$ID_day <- paste(T_decision_dynamic_cold_days$Individual, "_", T_decision_dynamic_cold_days$day)
+T_decision_stable_warm_days$ID_day <- paste(T_decision_stable_warm_days$Individual, "_", T_decision_stable_warm_days$day)
+T_decision_dynamic_warm_days$ID_day <- paste(T_decision_dynamic_warm_days$Individual, "_", T_decision_dynamic_warm_days$day)
+T_decision_very_warm_days$ID_day <- paste(T_decision_very_warm_days$Individual, "_", T_decision_very_warm_days$day)
+
+# Keeping the sample size equal between empirical data and simulations
+
+#set.seed(17)
+#sample_ID_T_stable_cold_days_night <- sample(T_decision_stable_cold_days$ID_day, 3, replace = FALSE, prob = NULL)
+#set.seed(18)
+#sample_ID_T_dynamic_cold_days_night <- sample(T_decision_dynamic_cold_days$ID_day, 5, replace = FALSE, prob = NULL)
+#set.seed(19)
+#sample_ID_T_stable_warm_days_night <- sample(T_decision_stable_warm_days$ID_day, 9, replace = FALSE, prob = NULL)
+#set.seed(20)
+#sample_ID_T_dynamic_warm_days_night <- sample(T_decision_dynamic_warm_days$ID_day, 7, replace = FALSE, prob = NULL)
+#set.seed(21)
+#sample_ID_T_very_warm_days_night <- sample(T_decision_very_warm_days$ID_day, 7, replace = FALSE, prob = NULL)
+#set.seed(22)
+
+#T_decision_stable_cold_days_sampled_night <- T_decision_stable_cold_days[T_decision_stable_cold_days$ID_day %in% sample_ID_T_stable_cold_days_night, ]
+#T_decision_dynamic_cold_days_sampled_night <- T_decision_dynamic_cold_days[T_decision_dynamic_cold_days$ID_day %in% sample_ID_T_dynamic_cold_days_night, ]
+#T_decision_stable_warm_days_sampled_night <- T_decision_stable_warm_days[T_decision_stable_warm_days$ID_day %in% sample_ID_T_stable_warm_days_night, ]
+#T_decision_dynamic_warm_days_sampled_night <- T_decision_dynamic_warm_days[T_decision_dynamic_warm_days$ID_day %in% sample_ID_T_dynamic_warm_days_night, ]
+#T_decision_very_warm_days_sampled_night <- T_decision_very_warm_days[T_decision_very_warm_days$ID_day %in% sample_ID_T_very_warm_days_night, ]
+
+# Sampling 50 simulations per day type observation
+
+test8 <- T_decision_stable_cold_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test9 <- T_decision_dynamic_cold_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test10 <- T_decision_stable_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test11 <- T_decision_dynamic_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test12 <- T_decision_very_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+set.seed(23)
+sample_ID_T_stable_cold_days_night2 <- sample(test8$ID_day, 78, replace = FALSE, prob = NULL)
+set.seed(24)
+sample_ID_T_dynamic_cold_days_night2 <- sample(test9$ID_day, 130, replace = FALSE, prob = NULL)
+set.seed(25)
+sample_ID_T_stable_warm_days_night2 <- sample(test10$ID_day, 234, replace = FALSE, prob = NULL)
+set.seed(26)
+sample_ID_T_dynamic_warm_days_night2 <- sample(test11$ID_day, 182, replace = FALSE, prob = NULL)
+set.seed(27)
+sample_ID_T_very_warm_days_night2 <- sample(test12$ID_day, 182, replace = FALSE, prob = NULL)
+
+
+T_decision_stable_cold_days_sampled_night <- T_decision_stable_cold_days[T_decision_stable_cold_days$ID_day %in% sample_ID_T_stable_cold_days_night2, ]
+T_decision_dynamic_cold_days_sampled_night <- T_decision_dynamic_cold_days[T_decision_dynamic_cold_days$ID_day %in% sample_ID_T_dynamic_cold_days_night2, ]
+T_decision_stable_warm_days_sampled_night <- T_decision_stable_warm_days[T_decision_stable_warm_days$ID_day %in% sample_ID_T_stable_warm_days_night2, ]
+T_decision_dynamic_warm_days_sampled_night <- T_decision_dynamic_warm_days[T_decision_dynamic_warm_days$ID_day %in% sample_ID_T_dynamic_warm_days_night2, ]
+T_decision_very_warm_days_sampled_night <- T_decision_very_warm_days[T_decision_very_warm_days$ID_day %in% sample_ID_T_very_warm_days_night2, ]
+
+
+
+T_ALL_days_sampled_night <- rbind(T_decision_stable_cold_days_sampled_night,
+                                  T_decision_dynamic_cold_days_sampled_night,
+                                  T_decision_stable_warm_days_sampled_night,
+                                  T_decision_dynamic_warm_days_sampled_night,
+                                  T_decision_very_warm_days_sampled_night)
+
+N_decision_stable_cold_days$ID_day <- paste(N_decision_stable_cold_days$Individual, "_", N_decision_stable_cold_days$day)
+N_decision_dynamic_cold_days$ID_day <- paste(N_decision_dynamic_cold_days$Individual, "_", N_decision_dynamic_cold_days$day)
+N_decision_dynamic_warm_days$ID_day <- paste(N_decision_dynamic_warm_days$Individual, "_", N_decision_dynamic_warm_days$day)
+
+# Keeping the sample size equal between empirical and simulations
+#set.seed(28)
+#sample_ID_N_stable_cold_days_night <- sample(N_decision_stable_cold_days$ID_day, 1, replace = FALSE, prob = NULL)
+#set.seed(29)
+#sample_ID_N_dynamic_cold_days_night <- sample(N_decision_dynamic_cold_days$ID_day, 1, replace = FALSE, prob = NULL)
+#set.seed(30)
+#sample_ID_N_dynamic_warm_days_night <- sample(N_decision_dynamic_warm_days$ID_day, 5, replace = FALSE, prob = NULL)
+
+#N_decision_stable_cold_days_sampled_night <- N_decision_stable_cold_days[N_decision_stable_cold_days$ID_day %in% sample_ID_N_stable_cold_days_night, ]
+#N_decision_dynamic_cold_days_sampled_night <- N_decision_dynamic_cold_days[N_decision_dynamic_cold_days$ID_day %in% sample_ID_N_dynamic_cold_days_night, ]
+#N_decision_dynamic_warm_days_sampled_night <- N_decision_dynamic_warm_days[N_decision_dynamic_warm_days$ID_day %in% sample_ID_N_dynamic_warm_days_night, ]
+
+# Run 50 simulations per observation
+
+test13 <- N_decision_stable_cold_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test14 <- N_decision_dynamic_cold_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+test15 <- N_decision_dynamic_warm_days %>%
+  group_by(ID_day) %>%
+  count(ID_day) %>%
+  ungroup %>%
+  filter(n ==72)
+
+
+set.seed(27)
+sample_ID_N_stable_cold_days_night2 <- sample(test13$ID_day, 50, replace = FALSE, prob = NULL)
+set.seed(28)
+sample_ID_N_dynamic_cold_days_night2 <- sample(test14$ID_day, 50, replace = FALSE, prob = NULL)
+set.seed(29)
+sample_ID_N_dynamic_warm_days_night2 <- sample(test15$ID_day, 250, replace = FALSE, prob = NULL)
+
+N_decision_stable_cold_days_sampled_night <- N_decision_stable_cold_days[N_decision_stable_cold_days$ID_day %in% sample_ID_N_stable_cold_days_night2, ]
+N_decision_dynamic_cold_days_sampled_night <- N_decision_dynamic_cold_days[N_decision_dynamic_cold_days$ID_day %in% sample_ID_N_dynamic_cold_days_night2, ]
+N_decision_dynamic_warm_days_sampled_night <- N_decision_dynamic_warm_days[N_decision_dynamic_warm_days$ID_day %in% sample_ID_N_dynamic_warm_days_night2, ]
+
+
+N_ALL_days_sampled_night <- rbind(N_decision_stable_cold_days_sampled_night,
+                                  N_decision_dynamic_cold_days_sampled_night,
+                                  N_decision_dynamic_warm_days_sampled_night)
+
+T_ALL_days_sampled_night$Place <- "Trondheim"
+N_ALL_days_sampled_night$Place <- "Nittedal"
+
+T_ALL_days_sampled_night$Night_Day <- ifelse(T_ALL_days_sampled_night$timestep < 61, "Day", "Night")
+N_ALL_days_sampled_night$Night_Day <- ifelse(N_ALL_days_sampled_night$timestep < 57, "Day", "Night")
+
+BOTH_ALL_days_sampled_night <- rbind(T_ALL_days_sampled_night,N_ALL_days_sampled_night)
+
+nighttime_BOTH_ALL_days_sampled <- subset(BOTH_ALL_days_sampled_night,Night_Day=="Night")
+nighttime_BOTH_ALL_days_sampled$decision <- as.factor(nighttime_BOTH_ALL_days_sampled$decision)
+levels(nighttime_BOTH_ALL_days_sampled$decision)
+
+df2 <- nighttime_BOTH_ALL_days_sampled %>%
+  group_by(Individual,Place) %>%
+  count(day)
+
+colnames(df2) <- c("ID","Light","DayNumber", "Day_length")
+
+nighttime_BOTH_ALL_days_sampled_summary_Tron <- nighttime_BOTH_ALL_days_sampled %>%
+  filter(Place=="Trondheim") %>%
+  group_by(Individual,day) %>%
+  count(decision, .drop = FALSE)
+
+nighttime_BOTH_ALL_days_sampled_summary_Nitt <- nighttime_BOTH_ALL_days_sampled %>%
+  filter(Place=="Nittedal") %>%
+  group_by(Individual,day) %>%
+  count(decision, .drop = FALSE)
+
+nighttime_BOTH_ALL_days_sampled_summary_Tron$Light <- "Trondheim"
+nighttime_BOTH_ALL_days_sampled_summary_Nitt$Light <- "Nittedal"
+
+nighttime_BOTH_ALL_days_sampled_summary <- rbind(nighttime_BOTH_ALL_days_sampled_summary_Tron,nighttime_BOTH_ALL_days_sampled_summary_Nitt)
+
+colnames(nighttime_BOTH_ALL_days_sampled_summary) <- c("ID", "DayNumber", "Activity", "Count", "Light")
+names(nighttime_BOTH_ALL_days_sampled_summary)
+
+nighttime_BOTH_ALL_days_sampled_summary <- left_join(nighttime_BOTH_ALL_days_sampled_summary, df2, by=c("ID", "DayNumber", "Light"))
+nighttime_BOTH_ALL_days_sampled_summary$Percent <- nighttime_BOTH_ALL_days_sampled_summary$Count*100/nighttime_BOTH_ALL_days_sampled_summary$Day_length
+
+nighttime_BOTH_ALL_days_sampled_summary$ID_day <- paste(nighttime_BOTH_ALL_days_sampled_summary$ID, "_", nighttime_BOTH_ALL_days_sampled_summary$DayNumber)
+
+nighttime_BOTH_ALL_days_sampled_summary$Weather <- BOTH_ALL_days_sampled_night$day_type[match(nighttime_BOTH_ALL_days_sampled_summary$ID_day,BOTH_ALL_days_sampled_night$ID_day)]
+
+nighttime_BOTH_ALL_days_sampled_summary$Weather <- factor(nighttime_BOTH_ALL_days_sampled_summary$Weather, levels = c("Stable cold","Dynamic cold","Stable warm","Dynamic warm", "Very warm"))
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor <- subset(nighttime_BOTH_ALL_days_sampled_summary,Activity =="Torpor")
+nighttime_BOTH_ALL_days_sampled_summary_resting <- subset(nighttime_BOTH_ALL_days_sampled_summary,Activity =="Rest")
+nighttime_BOTH_ALL_days_sampled_summary_foraging <- subset(nighttime_BOTH_ALL_days_sampled_summary,Activity =="Forage")
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa <- NA
+nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa <- NA
+nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa <- NA
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_torpor$Weather=="Stable cold", 9.57,
+                                                                nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_resting$Weather=="Stable cold", 9.57,
+                                                                 nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_foraging$Weather=="Stable cold", 9.57,
+                                                                  nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_torpor$Weather=="Dynamic cold", 11.44,
+                                                                nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_resting$Weather=="Dynamic cold", 11.44,
+                                                                 nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_foraging$Weather=="Dynamic cold", 11.44,
+                                                                  nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_torpor$Weather=="Stable warm", 15.29,
+                                                                nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_resting$Weather=="Stable warm", 15.29,
+                                                                 nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_foraging$Weather=="Stable warm", 15.29,
+                                                                  nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_torpor$Weather=="Dynamic warm", 17.6,
+                                                                nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_resting$Weather=="Dynamic warm", 17.6,
+                                                                 nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_foraging$Weather=="Dynamic warm", 17.6,
+                                                                  nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_torpor$Weather=="Very warm", 22.53,
+                                                                nighttime_BOTH_ALL_days_sampled_summary_torpor$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_resting$Weather=="Very warm", 22.53,
+                                                                 nighttime_BOTH_ALL_days_sampled_summary_resting$MeanTa)
+
+nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa <- ifelse(nighttime_BOTH_ALL_days_sampled_summary_foraging$Weather=="Very warm", 22.53,
+                                                                  nighttime_BOTH_ALL_days_sampled_summary_foraging$MeanTa)
+
+# Putting them together to figure 5
+
+nighttime_BOTH_ALL_days_sampled_summary_foraging$Data <- "Model"
+nighttime_BOTH_ALL_days_sampled_summary_torpor$Data <- "Model"
+nighttime_BOTH_ALL_days_sampled_summary_resting$Data <- "Model"
+Tskin_enil_summary_night_forage_final$Data <- "Observations"
+Tskin_enil_summary_night_torpor_final$Data <- "Observations"
+Tskin_enil_summary_night_rest_final$Data <- "Observations"
+
+names(Tskin_enil_summary_night_forage_final)
+names(nighttime_BOTH_ALL_days_sampled_summary_foraging)
+
+empty_df2 <- data.frame(matrix(nrow = 1610, ncol = 14)) 
+colnames(empty_df2) <- c("ID", "DayNumber", "Activity", "Count", "Light", "Day_length", "Percent", "MeanTa", "MinTa", "MaxTa", "Ta_range", "Weather", "MeanTa_day", "Data")
+
+Tskin_enil_summary_night_forage_final <- rbind(Tskin_enil_summary_night_forage_final,empty_df2)
+
+
+names(Tskin_enil_summary_night_forage_final[,c(5,7,8,12,14)])
+names(nighttime_BOTH_ALL_days_sampled_summary_foraging[,c(5,7,10,9,11)])
+
+Obs_and_Mod_nightdata_forage <- rbind(Tskin_enil_summary_night_forage_final[,c(5,7,8,12,14)],
+                                      nighttime_BOTH_ALL_days_sampled_summary_foraging[,c(5,7,10,9,11)])
+
+Obs_and_Mod_nightdata_torpor <- rbind(Tskin_enil_summary_night_torpor_final[,c(5,7,8,12,14)],
+                                      nighttime_BOTH_ALL_days_sampled_summary_torpor[,c(5,7,10,9,11)])
+
+Obs_and_Mod_nightdata_rest <- rbind(Tskin_enil_summary_night_rest_final[,c(5,7,8,12,14)],
+                                    nighttime_BOTH_ALL_days_sampled_summary_resting[,c(5,7,10,9,11)])
+
+Obs_and_Mod_nightdata_forage$Light_data <- interaction(Obs_and_Mod_nightdata_forage$Light, Obs_and_Mod_nightdata_forage$Data)
+Obs_and_Mod_nightdata_torpor$Light_data <- interaction(Obs_and_Mod_nightdata_torpor$Light, Obs_and_Mod_nightdata_torpor$Data)
+Obs_and_Mod_nightdata_rest$Light_data <- interaction(Obs_and_Mod_nightdata_rest$Light, Obs_and_Mod_nightdata_rest$Data)
+
+Obs_and_Mod_nightdata_forage$Light_data <- factor(Obs_and_Mod_nightdata_forage$Light_data, levels = c("Nittedal.Model", "Nittedal.Observations", "Trondheim.Model", "Trondheim.Observations"))
+Obs_and_Mod_nightdata_torpor$Light_data <- factor(Obs_and_Mod_nightdata_torpor$Light_data, levels = c("Nittedal.Model", "Nittedal.Observations", "Trondheim.Model", "Trondheim.Observations"))
+Obs_and_Mod_nightdata_rest$Light_data <- factor(Obs_and_Mod_nightdata_rest$Light_data, levels = c("Nittedal.Model", "Nittedal.Observations", "Trondheim.Model", "Trondheim.Observations"))
+
+first_plot_forage_night <- ggplot(Obs_and_Mod_nightdata_forage, aes(x = Light_data, y = Percent)) +
+  theme_classic()+
+  geom_boxplot(outlier.shape = NA, colour=c("black", "black", "gray60", "gray60"))+
+  geom_point(position=position_jitterdodge(),size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black","gray60"))+
+  scale_color_manual(values=c("red","black", "red", "gray60"))+
+  labs(y="Nightly foraging (%)")+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_discrete(labels=c("Nitt\nMod","Nitt\nObs","Trond\nMod","Trond\nObs"))+
+  guides(colour="none", shape="none", fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.x = element_blank())+
+  annotate("text", y=90, x=0.1, label = "(a)")+
+  coord_cartesian(xlim = c(1,4), clip = "off")
+
+extra_plot_forage_night_N <- ggplot(subset(Obs_and_Mod_nightdata_forage, Light=="Nittedal"), aes(x = MeanTa, y = Percent)) +
+  theme_classic()+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_forage,Light_data=="Nittedal.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="black")+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_forage,Light_data=="Nittedal.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  geom_point(size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black"))+
+  scale_color_manual(values=c("red","black"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(breaks=seq(10,30,10),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none")+
+  labs(y="Nightly foraging (%)", title="Nittedal")+
+  theme(axis.text.y = element_text(colour="black"),
+        axis.text.x = element_text(colour="black"),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=11))+
+  annotate("text", y=90, x=4.5, label = "(d)")+
+  coord_cartesian(xlim = c(8,28), clip = "off")
+
+extra_plot_forage_night_T <- ggplot(subset(Obs_and_Mod_nightdata_forage, Light=="Trondheim"), aes(x = MeanTa, y = Percent)) +
+  theme_classic()+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_forage,Light_data=="Trondheim.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="gray60")+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_forage,Light_data=="Trondheim.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  geom_point(size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("gray60"))+
+  scale_color_manual(values=c("red", "gray60"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(limits=c(8,28),breaks=seq(10,30,10),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none")+
+  labs(y="Nightly foraging (%)", title="Trondheim")+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour="black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=11),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))
+
+extra_plot_forage_night_both <- grid.arrange(extra_plot_forage_night_N,extra_plot_forage_night_T, layout_matrix=rbind
+                                             (c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                                                2,2,2,2,2,2,2,2,2,2,2,2)))
+
+second_plot_torpor_night <- ggplot(Obs_and_Mod_nightdata_torpor, aes(x = Light_data, y = Percent)) +
+  theme_classic()+
+  geom_boxplot(outlier.shape = NA, colour=c("black", "black", "gray60", "gray60"))+
+  geom_point(position=position_jitterdodge(),size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black","gray60"))+
+  scale_color_manual(values=c("red","black", "red", "gray60"))+
+  labs(y="Nightly torpor (%)")+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_discrete(labels=c("Nitt\nMod","Nitt\nObs","Trond\nMod","Trond\nObs"))+
+  guides(colour="none", shape="none", fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(colour = "black"),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(vjust = 5),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))+
+  annotate("text", y=90, x=0.1, label = "(b)")+
+  coord_cartesian(xlim = c(1,4), clip = "off")
+
+extra_plot_torpor_night_N <- ggplot(subset(Obs_and_Mod_nightdata_torpor, Light=="Nittedal"), aes(x = MeanTa, y = Percent)) +
+  theme_classic()+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_torpor,Light_data=="Nittedal.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="black")+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_torpor,Light_data=="Nittedal.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  geom_point(size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black"))+
+  scale_color_manual(values=c("red","black"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(breaks=seq(10,30,10),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none")+
+  labs(y="Nightly torpor (%)", title="Nittedal")+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour="black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=11),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))+
+  annotate("text", y=90, x=4.5, label = "(e)")+
+  coord_cartesian(xlim = c(8,28), clip = "off")
+
+extra_plot_torpor_night_T <- ggplot(subset(Obs_and_Mod_nightdata_torpor, Light=="Trondheim"), aes(x = MeanTa, y = Percent)) +
+  theme_classic()+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_torpor,Light_data=="Trondheim.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="gray60")+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_torpor,Light_data=="Trondheim.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  geom_point(size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("gray60"))+
+  scale_color_manual(values=c("red", "gray60"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(limits=c(8,28),breaks=seq(10,30,10),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none")+
+  labs(y="Nightly torpor (%)", title="Trondheim")+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour="black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=11),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))
+
+extra_plot_torpor_night_both <- grid.arrange(extra_plot_torpor_night_N,extra_plot_torpor_night_T, nrow=1,  left = textGrob("Nightly torpor (%)", rot = 90, vjust = 0.8, gp = gpar(cex = 0.9)))
+
+third_plot_rest_night <- ggplot(Obs_and_Mod_nightdata_rest, aes(x = Light_data, y = Percent)) +
+  theme_classic()+
+  geom_boxplot(outlier.shape = NA, colour=c("black", "black", "gray60", "gray60"))+
+  geom_point(position=position_jitterdodge(),size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black","gray60"))+
+  scale_color_manual(values=c("red","black", "red", "gray60"))+
+  labs(y="Nightly resting (%)")+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_discrete(labels=c("Nitt\nMod","Nitt\nObs","Trond\nMod","Trond\nObs"))+
+  guides(colour="none", shape="none", fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(vjust = 5),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))+
+  annotate("text", y=90, x=0.1, label = "(c)")+
+  coord_cartesian(xlim = c(1,4), clip = "off")
+
+extra_plot_rest_night_N <- ggplot(subset(Obs_and_Mod_nightdata_rest, Light=="Nittedal"), aes(x = MeanTa, y = Percent)) +
+  theme_classic()+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_rest,Light_data=="Nittedal.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="black")+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_rest,Light_data=="Nittedal.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  geom_point(size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("black"))+
+  scale_color_manual(values=c("red","black"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(breaks=seq(10,30,10),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none")+
+  labs(y="Nightly resting (%)", title="Nittedal")+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour="black"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=11),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))+
+  annotate("text", y=90, x=4.5, label = "(f)")+
+  coord_cartesian(xlim = c(8,28), clip = "off")
+
+extra_plot_rest_night_T <- ggplot(subset(Obs_and_Mod_nightdata_rest, Light=="Trondheim"), aes(x = MeanTa, y = Percent)) +
+  theme_classic()+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_rest,Light_data=="Trondheim.Observations"),
+              method = "lm", formula = y ~ x, se=F, colour="gray60")+
+  stat_smooth(data=subset(Obs_and_Mod_nightdata_rest,Light_data=="Trondheim.Model"),
+              method = "lm", formula = y ~ x, se=F, colour="red")+
+  geom_point(size=1.5,aes(shape=Data, fill=Light, colour=Light_data), stroke=0.5)+
+  scale_shape_manual(values=c(24, 21))+
+  scale_fill_manual(values=c("gray60"))+
+  scale_color_manual(values=c("red", "gray60"))+
+  scale_y_continuous(limits=c(-2,102),breaks=seq(0,100,25),expand = c(0,0))+
+  scale_x_continuous(limits=c(8,28), breaks=seq(10,30,10),expand = c(0,0))+
+  guides(colour="none", fill="none", shape="none")+
+  labs(y="Nightly resting (%)", title="Trondheim")+
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(colour="black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        plot.title = element_text(hjust = 0.5, size=11),
+        plot.margin = margin(0.2,0.2,0.2,0.5, "cm"))
+
+extra_plot_rest_night_both <- grid.arrange(extra_plot_rest_night_N,extra_plot_rest_night_T, nrow=1, left = textGrob("Nightly resting (%)", rot = 90, vjust = 0.8, gp = gpar(cex = 0.9)))
+
+foraging_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/flying_bat.png", native = TRUE)
+rest_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/resting_bat.png", native = TRUE)
+torpor_image <- readPNG("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/sleeping_bat.png", native = TRUE)
+
+annotation_custom2 <- 
+  function (grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, data){ 
+    layer(data = data, stat = StatIdentity, position = PositionIdentity, geom = ggplot2:::GeomCustomAnn,
+          inherit.aes = TRUE, params = list(grob = grob, 
+                                            xmin = xmin, xmax = xmax, 
+                                            ymin = ymin, ymax = ymax))}
+
+rest_plot3_image = annotation_custom2(rasterGrob(rest_image, interpolate=TRUE), 
+                                      #xmin=-0.1, xmax=1.4, ymin=78, ymax=99, 
+                                      xmin=1, xmax=2.4, ymin=68, ymax=102, 
+                                      data=Obs_and_Mod_nightdata_rest)
+
+third_plot_rest_night_new <- third_plot_rest_night + rest_plot3_image
+
+torpor_plot2_image = annotation_custom2(rasterGrob(torpor_image, interpolate=TRUE), 
+                                        #xmin=0.1, xmax=1.4, ymin=75, ymax=99,
+                                        xmin=1.3, xmax=2.3, ymin=60, ymax=103, 
+                                        data=Obs_and_Mod_nightdata_torpor)
+
+second_plot_torpor_night_new <- second_plot_torpor_night + torpor_plot2_image
+
+forage_plot1_image = annotation_custom2(rasterGrob(foraging_image, interpolate=TRUE), 
+                                        #xmin=0.8, xmax=1.9, ymin=83, ymax=113, 
+                                        xmin=0.8, xmax=2.5, ymin=78, ymax=110, 
+                                        data=Obs_and_Mod_nightdata_forage)
+
+first_plot_forage_night_new <- first_plot_forage_night + forage_plot1_image
+
+combined_plot_forage_night <- grid.arrange(first_plot_forage_night_new, extra_plot_forage_night_both,ncol=1)
+combined_plot_rest_night <- grid.arrange(third_plot_rest_night_new, extra_plot_rest_night_both,ncol=1)
+combined_plot_torpor_night <- grid.arrange(second_plot_torpor_night_new, extra_plot_torpor_night_both,ncol=1)
+
+combined_plot_forage_night <- as.ggplot(combined_plot_forage_night)
+combined_plot_rest_night <- as.ggplot(combined_plot_rest_night)
+combined_plot_torpor_night <- as.ggplot(combined_plot_torpor_night)
+
+night_torpor_plot <- as.ggplot(grid.arrange(combined_plot_forage_night,combined_plot_torpor_night,combined_plot_rest_night,nrow=1, bottom="Mean temperature"))
+
+#ggsave("Fig. 4_new.jpg", plot = night_torpor_plot, width = 9.83, height = 5.41, units = "in", dpi = 300)
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 4.jpeg", plot = night_torpor_plot, width = 180, height = 140, units="mm", dpi = 1000, bg="white")
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 4.pdf", plot = night_torpor_plot, width = 180, height = 100, units="mm", dpi = 1000)
+
+
+
+
+
+# Performing Welch t-test for Trondheim
+T_obs_night_forage <- subset(Obs_and_Mod_nightdata_forage,Light_data=="Trondheim.Observations") 
+T_model_night_forage <- subset(Obs_and_Mod_nightdata_forage,Light_data=="Trondheim.Model")
+
+t.test(T_obs_night_forage$Percent, T_model_night_forage$Percent)
+
+summary(T_obs_night_forage$Percent)
+summary(T_model_night_forage$Percent)
+
+
+T_obs_night_torpor <- subset(Obs_and_Mod_nightdata_torpor,Light_data=="Trondheim.Observations") 
+T_model_night_torpor <- subset(Obs_and_Mod_nightdata_torpor,Light_data=="Trondheim.Model")
+
+t.test(T_obs_night_torpor$Percent, T_model_night_torpor$Percent)
+
+summary(T_obs_night_torpor$Percent)
+sd(T_model_night_torpor$Percent)
+
+
+
+T_obs_night_rest <- subset(Obs_and_Mod_nightdata_rest,Light_data=="Trondheim.Observations") 
+T_model_night_rest <- subset(Obs_and_Mod_nightdata_rest,Light_data=="Trondheim.Model")
+
+t.test(T_obs_night_rest$Percent, T_model_night_rest$Percent)
+
+summary(T_obs_night_rest$Percent)
+sd(T_model_night_rest$Percent)
+
+
+
+# Performing Welch t-test for Nittedal
+N_obs_night_forage <- subset(Obs_and_Mod_nightdata_forage,Light_data=="Nittedal.Observations") 
+N_model_night_forage <- subset(Obs_and_Mod_nightdata_forage,Light_data=="Nittedal.Model")
+
+t.test(N_obs_night_forage$Percent, N_model_night_forage$Percent)
+
+summary(N_obs_night_forage$Percent)
+sd(N_model_night_forage$Percent)
+
+
+N_obs_night_torpor <- subset(Obs_and_Mod_nightdata_torpor,Light_data=="Nittedal.Observations") 
+N_model_night_torpor <- subset(Obs_and_Mod_nightdata_torpor,Light_data=="Nittedal.Model")
+
+t.test(N_obs_night_torpor$Percent, N_model_night_torpor$Percent)
+
+summary(N_obs_night_torpor$Percent)
+sd(N_model_night_torpor$Percent)
+
+
+
+N_obs_night_rest <- subset(Obs_and_Mod_nightdata_rest,Light_data=="Nittedal.Observations") 
+N_model_night_rest <- subset(Obs_and_Mod_nightdata_rest,Light_data=="Nittedal.Model")
+
+t.test(N_obs_night_rest$Percent, N_model_night_rest$Percent)
+
+summary(N_obs_night_rest$Percent)
+sd(N_model_night_rest$Percent)
+
+
+
+
+#### Figure 5 ####
+# To make figure 5 each of the 5 locations must be run in turn through all three scripts (Prep, Backwards and Forwards),
+# and each must be run with each of the temperature scenarios (lines 75:78, specify scenario on line 85 in Prep-script)
+
+T_decision_all_dataset <- decision_all[,1:nb_indiv_forward,1:2160] 
+
+T_decision_all_dataset_reshaped<-reshape2::melt(T_decision_all_dataset[,])
+colnames(T_decision_all_dataset_reshaped)<-c("Individual","Time","value")
+T_decision_all_dataset_reshaped$decision<-NA
+
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==3)]<-"Forage"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==1)]<-"Torpor"
+T_decision_all_dataset_reshaped$decision[which(T_decision_all_dataset_reshaped$value==2)]<-"Rest"
+
+T_decision_all_dataset_reshaped$day<-rep(seq(1,30,length.out=30),each=nb_indiv_forward*72) 
+T_decision_all_dataset_reshaped$timestep<-NA
+
+for (day in T_decision_all_dataset_reshaped) {
+  timestep<-rep(seq(1,72,length.out=72),each=nb_indiv_forward) 
+  T_decision_all_dataset_reshaped[,6] <- timestep
+}
+
+T_fat_state_all_dataset <- fat_state_forward_all[,1:nb_indiv_forward,1:2160] 
+T_fat_state_all_dataset_reshaped<-reshape2::melt(T_fat_state_all_dataset[,])
+
+T_decision_all_dataset_reshaped$fat_reserves<-T_fat_state_all_dataset_reshaped$value
+
+T_day_type_all_dataset <- day_type_all[1:nb_indiv_forward,1:2160]
+T_day_type_all_dataset_reshaped<-reshape2::melt(T_day_type_all_dataset[,])
+T_decision_all_dataset_reshaped$day_type<-T_day_type_all_dataset_reshaped$value
+
+T_decision_all_dataset_reshaped<-na.omit(T_decision_all_dataset_reshaped)
+
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==1,"Very warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==2,"Dynamic warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==3,"Stable warm",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==4,"Dynamic cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==5,"Stable cold",T_decision_all_dataset_reshaped$day_type)
+T_decision_all_dataset_reshaped$day_type <- ifelse(T_decision_all_dataset_reshaped$day_type==6,"Very cold",T_decision_all_dataset_reshaped$day_type)
+
+T_decision_all_dataset_reshaped <- subset(T_decision_all_dataset_reshaped,fat_reserves>0) # Removing dead individuals
+
+T_decision_all_dataset_reshaped$decision <- factor(T_decision_all_dataset_reshaped$decision, levels = c("Torpor","Rest","Forage"))
+
+
+# Save for the location and temperature-scenario that was run in the appropriate dataset below
+
+## For Nittedal ##
+
+# Base pred threath
+T_decision_all_dataset_reshaped_surv_Nitt_base <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Nitt_base_cold <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Nitt_base_warm <- T_decision_all_dataset_reshaped
+
+T_decision_all_dataset_reshaped_surv_Nitt_base$Ta <- "base"
+T_decision_all_dataset_reshaped_surv_Nitt_base_cold$Ta <- "cold"
+T_decision_all_dataset_reshaped_surv_Nitt_base_warm$Ta <- "warm"
+
+T_decision_all_dataset_reshaped_surv_Nitt <- rbind(T_decision_all_dataset_reshaped_surv_Nitt_base,T_decision_all_dataset_reshaped_surv_Nitt_base_cold,T_decision_all_dataset_reshaped_surv_Nitt_base_warm)
+
+
+
+## For Trondheim ##
+
+# Base pred threath
+T_decision_all_dataset_reshaped_surv_Trond_base <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Trond_base_cold <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Trond_base_warm <- T_decision_all_dataset_reshaped
+
+
+T_decision_all_dataset_reshaped_surv_Trond_base$Ta <- "base"
+T_decision_all_dataset_reshaped_surv_Trond_base_cold$Ta <- "cold"
+T_decision_all_dataset_reshaped_surv_Trond_base_warm$Ta <- "warm"
+
+T_decision_all_dataset_reshaped_surv_Trond <- rbind(T_decision_all_dataset_reshaped_surv_Trond_base,T_decision_all_dataset_reshaped_surv_Trond_base_cold,T_decision_all_dataset_reshaped_surv_Trond_base_warm)
+
+
+
+## For Bodø ##
+
+# Base pred threath
+T_decision_all_dataset_reshaped_surv_Bodo_base <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Bodo_base_cold <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Bodo_base_warm <- T_decision_all_dataset_reshaped
+
+T_decision_all_dataset_reshaped_surv_Bodo_base$Ta <- "base"
+T_decision_all_dataset_reshaped_surv_Bodo_base_cold$Ta <- "cold"
+T_decision_all_dataset_reshaped_surv_Bodo_base_warm$Ta <- "warm"
+
+T_decision_all_dataset_reshaped_surv_Bodo <- rbind(T_decision_all_dataset_reshaped_surv_Bodo_base,T_decision_all_dataset_reshaped_surv_Bodo_base_cold,T_decision_all_dataset_reshaped_surv_Bodo_base_warm)
+
+
+
+
+## For Tromsø ##
+
+# Base pred threath
+T_decision_all_dataset_reshaped_surv_Troms_base <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Troms_base_cold <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Troms_base_warm <- T_decision_all_dataset_reshaped
+
+T_decision_all_dataset_reshaped_surv_Troms_base$Ta <- "base"
+T_decision_all_dataset_reshaped_surv_Troms_base_cold$Ta <- "cold"
+T_decision_all_dataset_reshaped_surv_Troms_base_warm$Ta <- "warm"
+
+T_decision_all_dataset_reshaped_surv_Troms <- rbind(T_decision_all_dataset_reshaped_surv_Troms_base,T_decision_all_dataset_reshaped_surv_Troms_base_cold,T_decision_all_dataset_reshaped_surv_Troms_base_warm)
+
+
+
+## For Gamvik ##
+
+# Base pred threath
+T_decision_all_dataset_reshaped_surv_Gamvik_base <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Gamvik_base_cold <- T_decision_all_dataset_reshaped
+T_decision_all_dataset_reshaped_surv_Gamvik_base_warm <- T_decision_all_dataset_reshaped
+
+T_decision_all_dataset_reshaped_surv_Gamvik_base$Ta <- "base"
+T_decision_all_dataset_reshaped_surv_Gamvik_base_cold$Ta <- "cold"
+T_decision_all_dataset_reshaped_surv_Gamvik_base_warm$Ta <- "warm"
+
+T_decision_all_dataset_reshaped_surv_Gamvik <- rbind(T_decision_all_dataset_reshaped_surv_Gamvik_base,T_decision_all_dataset_reshaped_surv_Gamvik_base_cold,T_decision_all_dataset_reshaped_surv_Gamvik_base_warm)
+
+
+# Put it together
+
+T_decision_all_dataset_reshaped_surv_Trond$Location <- "Trondheim"
+T_decision_all_dataset_reshaped_surv_Nitt$Location <- "Nittedal"
+T_decision_all_dataset_reshaped_surv_Bodo$Location <- "Bodø"
+T_decision_all_dataset_reshaped_surv_Troms$Location <- "Tromsø"
+T_decision_all_dataset_reshaped_surv_Gamvik$Location <- "Gamvik"
+
+T_decision_all_dataset_reshaped_SURVIVAL_all <- rbind(T_decision_all_dataset_reshaped_surv_Trond,T_decision_all_dataset_reshaped_surv_Nitt,T_decision_all_dataset_reshaped_surv_Bodo,
+                                                      T_decision_all_dataset_reshaped_surv_Troms,T_decision_all_dataset_reshaped_surv_Gamvik)
+
+library(dplyr)
+
+surv_summary_data <- T_decision_all_dataset_reshaped_SURVIVAL_all %>%
+  filter(timestep == 72) %>%
+  group_by(day, Ta, Location) %>%
+  count(day, .drop = FALSE) 
+
+surv_summary_data$p_alive <- surv_summary_data$n / nb_indiv_forward
+
+surv_summary_data$Ta <- factor(surv_summary_data$Ta, levels = c("cold", "base", "warm"))
+
+
+surv_summary_data_Nittedal <- subset(surv_summary_data, Location=="Nittedal")
+surv_summary_data_Trondheim <- subset(surv_summary_data, Location=="Trondheim")
+surv_summary_data_Bodo <- subset(surv_summary_data, Location=="Bodø")
+surv_summary_data_Troms <- subset(surv_summary_data, Location=="Tromsø")
+surv_summary_data_Gamvik <- subset(surv_summary_data, Location=="Gamvik")
+
+
+# Plot for Nittedal
+
+surv_Nittedal_plot <- ggplot(surv_summary_data_Nittedal, aes(x = day, y = p_alive)) +
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="cold"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="aliceblue")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="base"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="white")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="warm"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="mistyrose")+
+  facet_grid( ~ Ta, labeller = labeller(Ta = 
+                                          c("cold" = "Cold",
+                                            "base" = "Base",
+                                            "warm" = "Warm"))) +
+  geom_line(size=0.7) +
+  scale_x_continuous(limits=c(0,30.1),breaks=seq(0,30,15), expand = c(0,0), labels = c("","15",""))+
+  scale_y_continuous(limits=c(-0.02,1.05), breaks=seq(0,1,0.5), expand = c(0,0), labels = c("","0.5",""))+
+  theme_classic()+
+  labs(x="Day", y="Proportion alive")+
+  theme(plot.background = element_rect(fill = "transparent", color = NA),
+        strip.text.x = element_blank(),
+        plot.margin = unit(c(5.5, 5.5, 4, 2), "points"),
+        axis.text.y=element_text(colour="black", size=9),
+        axis.text.x=element_text(colour="black", size=9),
+        strip.text.y = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+surv_Nittedal_plot <- grid.arrange(surv_Nittedal_plot, right=textGrob("Nittedal", rot=-90, gp=gpar(fontsize=9)))
+surv_Nittedal_plot <- as.ggplot(surv_Nittedal_plot)
+
+
+
+# Plot for Trondheim
+
+surv_Trondheim_plot <- ggplot(surv_summary_data_Trondheim, aes(x = day, y = p_alive)) +
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="cold"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="aliceblue")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="base"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="white")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="warm"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="mistyrose")+
+  facet_grid( ~ Ta, labeller = labeller(Ta = 
+                                          c("cold" = "Cold",
+                                            "base" = "Base",
+                                            "warm" = "Warm"))) +
+  geom_line(size=0.7) +
+  scale_x_continuous(limits=c(0,30.1),breaks=seq(0,30,15), expand = c(0,0), labels = c("","15",""))+
+  scale_y_continuous(limits=c(-0.02,1.05), breaks=seq(0,1,0.5), expand = c(0,0), labels = c("","0.5",""))+
+  theme_classic()+
+  labs(x="Day", y="Proportion alive")+
+  theme(plot.background = element_rect(fill = "transparent", color = NA),
+        strip.text.x = element_blank(),
+        axis.text.y=element_text(colour="black", size=9),
+        plot.margin = unit(c(5.5, 5.5, 4, 2), "points"),
+        axis.text.x=element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+surv_Trondheim_plot <- grid.arrange(surv_Trondheim_plot, right=textGrob("Trondheim", rot=-90, gp=gpar(fontsize=9)))
+surv_Trondheim_plot <- as.ggplot(surv_Trondheim_plot)
+
+
+# Plot for Bodø
+
+surv_Bodo_plot <- ggplot(surv_summary_data_Bodo, aes(x = day, y = p_alive)) +
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="cold"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="aliceblue")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="base"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="white")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="warm"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="mistyrose")+
+  facet_grid( ~ Ta, labeller = labeller(Ta = 
+                                          c("cold" = "Cold",
+                                            "base" = "Base",
+                                            "warm" = "Warm"))) +
+  geom_line(size=0.7) +
+  scale_x_continuous(limits=c(0,30.1),breaks=seq(0,30,15), expand = c(0,0), labels = c("","15",""))+
+  scale_y_continuous(limits=c(-0.02,1.05), breaks=seq(0,1,0.5), expand = c(0,0), labels = c("","0.5",""))+
+  theme_classic()+
+  labs(x="Day", y="Proportion alive")+
+  theme(plot.background = element_rect(fill = "transparent", color = NA),
+        strip.text.x = element_blank(),
+        axis.text.y=element_text(colour="black", size=9),
+        plot.margin = unit(c(5.5, 5.5, 4, 2), "points"),
+        axis.text.x=element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+surv_Bodo_plot <- grid.arrange(surv_Bodo_plot, right=textGrob("Bodø", rot=-90, gp=gpar(fontsize=9)))
+surv_Bodo_plot <- as.ggplot(surv_Bodo_plot)
+
+
+
+# Plot for Tromsø
+
+surv_Troms_plot <- ggplot(surv_summary_data_Troms, aes(x = day, y = p_alive)) +
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="cold"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="aliceblue")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="base"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="white")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="warm"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="mistyrose")+
+  facet_grid( ~ Ta, labeller = labeller(Ta = 
+                                          c("cold" = "Cold",
+                                            "base" = "Base",
+                                            "warm" = "Warm"))) +
+  geom_line(size=0.7) +
+  scale_x_continuous(limits=c(0,30.1),breaks=seq(0,30,15), expand = c(0,0), labels = c("","15",""))+
+  scale_y_continuous(limits=c(-0.02,1.05), breaks=seq(0,1,0.5), expand = c(0,0), labels = c("","0.5",""))+
+  theme_classic()+
+  labs(x="Day", y="Proportion alive")+
+  theme(plot.background = element_rect(fill = "transparent", color = NA),
+        #plot.title = element_text(hjust=0.5, size=19),
+        strip.text.x = element_blank(),
+        axis.text.y=element_text(colour="black", size=9),
+        plot.margin = unit(c(5.5, 5.5, 4, 2), "points"),
+        axis.text.x=element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+surv_Troms_plot <- grid.arrange(surv_Troms_plot, right=textGrob("Tromsø", rot=-90, gp=gpar(fontsize=9)))
+surv_Troms_plot <- as.ggplot(surv_Troms_plot)
+
+
+
+# Plot for Gamvik
+
+surv_Gamvik_plot <- ggplot(surv_summary_data_Gamvik, aes(x = day, y = p_alive)) +
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="cold"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="aliceblue")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="base"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="white")+
+  geom_segment(data = subset(surv_summary_data_Nittedal,Ta =="warm"),aes(x = -Inf, xend = Inf, y=-Inf, yend = Inf), size=300,colour="mistyrose")+
+  facet_grid( ~ Ta, labeller = labeller(Ta = 
+                                          c("cold" = "Cold",
+                                            "base" = "Base",
+                                            "warm" = "Warm"))) +
+  geom_line(size=0.7) +
+  scale_x_continuous(limits=c(0,30.1),breaks=seq(0,30,15), expand = c(0,0), labels = c("","15",""))+
+  scale_y_continuous(limits=c(-0.02,1.05), breaks=seq(0,1,0.5), expand = c(0,0), labels = c("","0.5",""))+
+  theme_classic()+
+  labs(x="Day", y="Proportion alive")+
+  theme(plot.background = element_rect(fill = "transparent", color = NA),
+        axis.text.y=element_text(colour="black", size=9),
+        axis.text.x=element_blank(),
+        plot.margin = unit(c(5.5, 5.5, 4, 2), "points"),
+        strip.text.x = element_text(size = 9),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+surv_Gamvik_plot <- grid.arrange(surv_Gamvik_plot, right=textGrob("Gamvik", rot=-90, gp=gpar(fontsize=9)))
+surv_Gamvik_plot <- as.ggplot(surv_Gamvik_plot)
+
+# Putting them together
+
+surv_All_plot <- as.ggplot(grid.arrange(surv_Gamvik_plot,surv_Troms_plot,surv_Bodo_plot, surv_Trondheim_plot,surv_Nittedal_plot,
+                                        bottom=textGrob("Day", gp=gpar(fontsize=10)), left=textGrob("Proportion alive", rot=90, gp=gpar(fontsize=10)),layout_matrix=rbind
+                                        (c(1),
+                                          c(1),
+                                          c(1),
+                                          c(1),
+                                          c(1),
+                                          c(1),
+                                          c(2),
+                                          c(2),
+                                          c(2),
+                                          c(2),
+                                          c(2),
+                                          c(3),
+                                          c(3),
+                                          c(3),
+                                          c(3),
+                                          c(3),
+                                          c(4),
+                                          c(4),
+                                          c(4),
+                                          c(4),
+                                          c(4),
+                                          c(5),
+                                          c(5),
+                                          c(5),
+                                          c(5),
+                                          c(5),
+                                          c(5))))
+
+## Create the survival map-plot ##
+
+Norway.maps <- map_data("world", region = "Norway")
+levels(as.factor(Norway.maps$subregion))
+
+#Norway.maps$subregion <- ifelse(is.na(Norway.maps$subregion),"mainland",Norway.maps$subregion)
+
+#Norway.maps_2 <- Norway.maps %>%
+#  filter(subregion!="Svalbard") %>%
+#  filter(subregion!="Jan Mayen")
+
+
+map_plot <- ggplot(Norway.maps, aes(x = long, y = lat, group = group)) +
+  geom_polygon(fill="lightgray")+
+  scale_x_continuous(limits=c(4.8,36),expand = c(0,0))+
+  scale_y_continuous(limits=c(57,71.5), expand = c(0,0))+
+  theme_void()+
+  theme(legend.position = "none",
+        plot.background = element_rect(fill = "white", color = "white")) +
+  geom_point(aes(y = 60.1144, x = 10.8495), shape=21, fill=NA, colour="red", size=8, stroke=1.3)+
+  geom_point(aes(y = 63.4305, x = 10.3951), shape=21, fill=NA, colour="red", size=8, stroke=1.3)+
+  geom_point(aes(y = 67.2804, x = 14.4049), shape=21, fill=NA, colour="red", size=8, stroke=1.3)+
+  geom_point(aes(y = 69.6492, x = 18.9553), shape=21, fill=NA, colour="red", size=8, stroke=1.3)+
+  geom_point(aes(y = 70.9284, x = 28.0639), shape=21, fill=NA, colour="red", size=8, stroke=1.3)+
+  annotate("text", y=59.7144-0.27, x=10.8495, label = "Nittedal",size=3.3, colour="black")+
+  annotate("text", y=59.4144-0.42, x=10.8495, label = "60.1°N",size=3.3, colour="black")+
+  annotate("text", y=63.0305-0.27, x=10.3951, label = "Trondheim",size=3.3, colour="black")+
+  annotate("text", y=62.7305-0.42, x=10.3951, label = "63.4°N",size=3.3, colour="black")+
+  annotate("text", y=66.8804-0.27, x=14.4049, label = "Bodø",size=3.3, colour="black")+
+  annotate("text", y=66.5804-0.42, x=14.4049, label = "67.3°N",size=3.3, colour="black")+
+  annotate("text", y=69.2492-0.27, x=18.9553, label = "Tromsø",size=3.3, colour="black")+
+  annotate("text", y=68.9492-0.42, x=18.9553, label = "69.6°N",size=3.3, colour="black")+
+  annotate("text", y=70.5284-0.27, x=28.0639, label = "Gamvik",size=3.3, colour="black")+
+  annotate("text", y=70.2284-0.42, x=28.0639, label = "70.9°N",size=3.3, colour="black")
+
+map_plot_full_half_pred <- map_plot + annotation_custom(ggplotGrob(surv_All_plot), xmin = 14, xmax = 36, 
+                                                        ymin = 57, ymax = 68.45)
+
+ggsave("Fig. 6.jpg", plot = map_plot_full_half_pred, width = 4.8, height = 6.35, units = "in", dpi = 300)
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 5.jpeg", plot = map_plot_full_half_pred, width = 80, height = 110, units="mm", dpi = 1000, bg="white")
+
+ggsave("/Users/mariaasfjelldal/Desktop/PhD/Stochastic dynamic modelling/Writing/2022/R2/Figures/Fig. 5.pdf", plot = map_plot_full_half_pred, width = 80, height = 110, units="mm", dpi = 1000)
+
+
+
+
+
+
+
+#### Figure S4.1 ####
+
+# Use datasets from the baseline scenario of the survival plot #
+T_decision_all_dataset_reshaped_surv_Trond
+T_decision_all_dataset_reshaped_surv_Nitt
+T_decision_all_dataset_reshaped_surv_Bodo
+T_decision_all_dataset_reshaped_surv_Troms
+T_decision_all_dataset_reshaped_surv_Gamvik
+
+# For Trondheim
+T_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Trond,day_type=="Very warm" & Ta=="base")
+T_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Trond,day_type=="Dynamic warm" & Ta=="base")
+T_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Trond,day_type=="Stable warm" & Ta=="base")
+T_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Trond,day_type=="Dynamic cold" & Ta=="base")
+T_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Trond,day_type=="Stable cold" & Ta=="base")
+T_decision_very_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Trond,day_type=="Very cold" & Ta=="base")
+
+# For Nittedal
+N_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Nitt,day_type=="Very warm" & Ta=="base")
+N_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Nitt,day_type=="Dynamic warm" & Ta=="base")
+N_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Nitt,day_type=="Stable warm" & Ta=="base")
+N_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Nitt,day_type=="Dynamic cold" & Ta=="base")
+N_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Nitt,day_type=="Stable cold" & Ta=="base")
+
+# For Bodø
+B_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Bodo,day_type=="Very warm" & Ta=="base")
+B_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Bodo,day_type=="Dynamic warm" & Ta=="base")
+B_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Bodo,day_type=="Stable warm" & Ta=="base")
+B_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Bodo,day_type=="Dynamic cold" & Ta=="base")
+B_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Bodo,day_type=="Stable cold" & Ta=="base")
+B_decision_very_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Bodo,day_type=="Very cold" & Ta=="base")
+
+# For Tromsø
+Tr_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Troms,day_type=="Very warm" & Ta=="base")
+Tr_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Troms,day_type=="Dynamic warm" & Ta=="base")
+Tr_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Troms,day_type=="Stable warm" & Ta=="base")
+Tr_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Troms,day_type=="Dynamic cold" & Ta=="base")
+Tr_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Troms,day_type=="Stable cold" & Ta=="base")
+Tr_decision_very_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Troms,day_type=="Very cold" & Ta=="base")
+
+# For Gamvik
+G_decision_very_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Gamvik,day_type=="Very warm" & Ta=="base")
+G_decision_dynamic_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Gamvik,day_type=="Dynamic warm" & Ta=="base")
+G_decision_stable_warm_days_df <- subset(T_decision_all_dataset_reshaped_surv_Gamvik,day_type=="Stable warm" & Ta=="base")
+G_decision_dynamic_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Gamvik,day_type=="Dynamic cold" & Ta=="base")
+G_decision_stable_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Gamvik,day_type=="Stable cold" & Ta=="base")
+G_decision_very_cold_days_df <- subset(T_decision_all_dataset_reshaped_surv_Gamvik,day_type=="Very cold" & Ta=="base")
+
+
+# For Trondheim
+
+plot_T1<-ggplot(T_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black",  size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T1)$data[[1]]
+plot_T1 <- plot_T1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T1)$data[[1]]$count)),(max(ggplot_build(plot_T1)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T2<-ggplot(T_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black",  size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T2)$data[[1]]
+plot_T2 <- plot_T2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T2)$data[[1]]$count)),(max(ggplot_build(plot_T2)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T3<-ggplot(T_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black",  size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T3)$data[[1]]
+plot_T3 <- plot_T3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T3)$data[[1]]$count)),(max(ggplot_build(plot_T3)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_T4<-ggplot(T_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T4)$data[[1]]
+plot_T4 <- plot_T4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T4)$data[[1]]$count)),(max(ggplot_build(plot_T4)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T5<-ggplot(T_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T5)$data[[1]]
+plot_T5 <- plot_T5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T5)$data[[1]]$count)),(max(ggplot_build(plot_T5)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_T6<-ggplot(T_decision_very_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 62, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_T6)$data[[1]]
+plot_T6 <- plot_T6 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_T6)$data[[1]]$count)),(max(ggplot_build(plot_T6)$data[[1]]$count)/4)),
+                                        labels = c("0","","0.5","","1"))
+
+
+
+
+# For Nittedal
+
+plot_N1<-ggplot(N_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N1)$data[[1]]
+plot_N1 <- plot_N1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N1)$data[[1]]$count)),(max(ggplot_build(plot_N1)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_N2<-ggplot(N_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N2)$data[[1]]
+plot_N2 <- plot_N2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N2)$data[[1]]$count)),(max(ggplot_build(plot_N2)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_N3<-ggplot(N_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N3)$data[[1]]
+plot_N3 <- plot_N3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N3)$data[[1]]$count)),(max(ggplot_build(plot_N3)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_N4<-ggplot(N_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N4)$data[[1]]
+plot_N4 <- plot_N4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N4)$data[[1]]$count)),(max(ggplot_build(plot_N4)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_N5<-ggplot(N_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  geom_vline(xintercept = 57.5, color = "black", size=0.5, linetype="dashed")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_text(colour = "black"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_N5)$data[[1]]
+plot_N5 <- plot_N5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_N5)$data[[1]]$count)),(max(ggplot_build(plot_N5)$data[[1]]$count)/4)),
+                                        labels = c("0","","0.5","","1"))
+
+
+## Bodø
+
+plot_B1<-ggplot(B_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_B1)$data[[1]]
+plot_B1 <- plot_B1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_B1)$data[[1]]$count)),(max(ggplot_build(plot_B1)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_B2<-ggplot(B_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_B2)$data[[1]]
+plot_B2 <- plot_B2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_B2)$data[[1]]$count)),(max(ggplot_build(plot_B2)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_B3<-ggplot(B_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_B3)$data[[1]]
+plot_B3 <- plot_B3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_B3)$data[[1]]$count)),(max(ggplot_build(plot_B3)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_B4<-ggplot(B_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_B4)$data[[1]]
+plot_B4 <- plot_B4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_B4)$data[[1]]$count)),(max(ggplot_build(plot_B4)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_B5<-ggplot(B_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_B5)$data[[1]]
+plot_B5 <- plot_B5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_B5)$data[[1]]$count)),(max(ggplot_build(plot_B5)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_B6<-ggplot(B_decision_very_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_B6)$data[[1]]
+plot_B6 <- plot_B6 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_B6)$data[[1]]$count)),(max(ggplot_build(plot_B6)$data[[1]]$count)/4)),
+                                        labels = c("0","","0.5","","1"))
+
+
+
+## Tromsø
+
+plot_Tr1<-ggplot(Tr_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_Tr1)$data[[1]]
+plot_Tr1 <- plot_Tr1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_Tr1)$data[[1]]$count)),(max(ggplot_build(plot_Tr1)$data[[1]]$count)/4)),
+                                          labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_Tr2<-ggplot(Tr_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_Tr2)$data[[1]]
+plot_Tr2 <- plot_Tr2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_Tr2)$data[[1]]$count)),(max(ggplot_build(plot_Tr2)$data[[1]]$count)/4)),
+                                          labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_Tr3<-ggplot(Tr_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_Tr3)$data[[1]]
+plot_Tr3 <- plot_Tr3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_Tr3)$data[[1]]$count)),(max(ggplot_build(plot_Tr3)$data[[1]]$count)/4)),
+                                          labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_Tr4<-ggplot(Tr_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_Tr4)$data[[1]]
+plot_Tr4 <- plot_Tr4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_Tr4)$data[[1]]$count)),(max(ggplot_build(plot_Tr4)$data[[1]]$count)/4)),
+                                          labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_Tr5<-ggplot(Tr_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_Tr5)$data[[1]]
+plot_Tr5 <- plot_Tr5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_Tr5)$data[[1]]$count)),(max(ggplot_build(plot_Tr5)$data[[1]]$count)/4)),
+                                          labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_Tr6<-ggplot(Tr_decision_very_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_Tr6)$data[[1]]
+plot_Tr6 <- plot_Tr6 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_Tr6)$data[[1]]$count)),(max(ggplot_build(plot_Tr6)$data[[1]]$count)/4)),
+                                          labels = c("0","","0.5","","1"))
+
+
+
+## Gamvik
+
+plot_G1<-ggplot(G_decision_very_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Very warm")+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5,size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_G1)$data[[1]]
+plot_G1 <- plot_G1 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_G1)$data[[1]]$count)),(max(ggplot_build(plot_G1)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_G2<-ggplot(G_decision_dynamic_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Dynamic warm")+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5,size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_G2)$data[[1]]
+plot_G2 <- plot_G2 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_G2)$data[[1]]$count)),(max(ggplot_build(plot_G2)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_G3<-ggplot(G_decision_stable_warm_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Stable warm")+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5,size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_G3)$data[[1]]
+plot_G3 <- plot_G3 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_G3)$data[[1]]$count)),(max(ggplot_build(plot_G3)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+
+plot_G4<-ggplot(G_decision_dynamic_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Dynamic cold")+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5,size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_G4)$data[[1]]
+plot_G4 <- plot_G4 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_G4)$data[[1]]$count)),(max(ggplot_build(plot_G4)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_G5<-ggplot(G_decision_stable_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Stable cold")+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5,size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_G5)$data[[1]]
+plot_G5 <- plot_G5 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_G5)$data[[1]]$count)),(max(ggplot_build(plot_G5)$data[[1]]$count)/4)),
+                                        labels = c("0","0.25","0.5","0.75","1"))+theme(axis.text.y = element_blank())
+
+plot_G6<-ggplot(G_decision_very_cold_days_df, aes(x = timestep, fill=decision)) +
+  scale_fill_manual(values=c("#13306dff","#b8627dff", "#f9a242ff"))+
+  geom_histogram(aes(y = ..count..) ,binwidth = 1, alpha = 0.75) +
+  scale_x_continuous(limits=c(0,72),breaks=seq(0,72,30),expand = c(0,0))+
+  scale_y_continuous(expand = c(0,0))+
+  theme_classic()+
+  labs(title="Very cold")+
+  guides(fill="none")+
+  theme(plot.title = element_text(hjust = 0.5, size=11),
+        axis.text.y = element_text(colour = "black"),
+        axis.text.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+
+ggplot_build(plot_G6)$data[[1]]
+plot_G6 <- plot_G6 + scale_y_continuous(expand = c(0,0), breaks=seq(0,(max(ggplot_build(plot_G6)$data[[1]]$count)),(max(ggplot_build(plot_G6)$data[[1]]$count)/4)),
+                                        labels = c("0","","0.5","","1"))
+
+
+# Put them together
+
+plot_Trondheim_all_days_2 <- as.ggplot(grid.arrange(plot_T6,plot_T5,plot_T4,plot_T3,plot_T2,plot_T1, right=textGrob("Trondheim", rot=-90),layout_matrix=rbind
+                                                    (c(1,1,1,1,1,1,
+                                                       2,2,2,2,2,
+                                                       3,3,3,3,3,
+                                                       4,4,4,4,4,
+                                                       5,5,5,5,5,
+                                                       6,6,6,6,6))))
+
+plot_Nittedal_all_days_2 <- as.ggplot(grid.arrange(plot_N5,plot_N4,plot_N3,plot_N2,plot_N1, right=textGrob("Nittedal", rot=-90), layout_matrix=rbind
+                                                   (c(NA,NA,NA,NA,NA,
+                                                      1,1,1,1,1,1,
+                                                      2,2,2,2,2,
+                                                      3,3,3,3,3,
+                                                      4,4,4,4,4,
+                                                      5,5,5,5,5))))
+
+plot_Bodø_all_days_2 <- as.ggplot(grid.arrange(plot_B6,plot_B5,plot_B4,plot_B3,plot_B2,plot_B1,right=textGrob("Bodø", rot=-90),layout_matrix=rbind
+                                               (c(1,1,1,1,1,1,
+                                                  2,2,2,2,2,
+                                                  3,3,3,3,3,
+                                                  4,4,4,4,4,
+                                                  5,5,5,5,5,
+                                                  6,6,6,6,6))))
+
+plot_Tromsø_all_days_2 <- as.ggplot(grid.arrange(plot_Tr6,plot_Tr5,plot_Tr4,plot_Tr3,plot_Tr2,plot_Tr1,nrow=1,right=textGrob("Tromsø", rot=-90),layout_matrix=rbind
+                                                 (c(1,1,1,1,1,1,
+                                                    2,2,2,2,2,
+                                                    3,3,3,3,3,
+                                                    4,4,4,4,4,
+                                                    5,5,5,5,5,
+                                                    6,6,6,6,6))))
+
+
+plot_Gamvik_all_days_2 <- as.ggplot(grid.arrange(plot_G6,plot_G5,plot_G4,plot_G3,plot_G2,plot_G1,nrow=1,right=textGrob("Gamvik", rot=-90), layout_matrix=rbind
+                                                 (c(1,1,1,1,1,1,
+                                                    2,2,2,2,2,
+                                                    3,3,3,3,3,
+                                                    4,4,4,4,4,
+                                                    5,5,5,5,5,
+                                                    6,6,6,6,6))))
+
+
+plot_both_all_days_2 <- as.ggplot(grid.arrange(plot_Gamvik_all_days_2,plot_Tromsø_all_days_2,plot_Bodø_all_days_2,plot_Trondheim_all_days_2,plot_Nittedal_all_days_2, left="Proportion of bats", bottom="Timestep", layout_matrix=rbind
+                                               (c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(2),
+                                                 c(2),
+                                                 c(2),
+                                                 c(2),
+                                                 c(2),
+                                                 c(3),
+                                                 c(3),
+                                                 c(3),
+                                                 c(3),
+                                                 c(3),
+                                                 c(4),
+                                                 c(4),
+                                                 c(4),
+                                                 c(4),
+                                                 c(4),
+                                                 c(5),
+                                                 c(5),
+                                                 c(5),
+                                                 c(5),
+                                                 c(5),
+                                                 c(5))))
+
+plot_both_all_days_3 <- as.ggplot(grid.arrange(plot_both_all_days_2, legend_1, layout_matrix=rbind
+                                               (c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(1),
+                                                 c(2))))
+
+
+plot_both_all_days_3 <- plot_both_all_days_3 + theme(plot.background = element_rect(fill = "white", color = "white"))
+
+ggsave("Fig. 7.jpg", plot = plot_both_all_days_3, width = 7.37, height = 5.9, units = "in", dpi = 300)
+
