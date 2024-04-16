@@ -1,8 +1,8 @@
 #### SCRIPT FOR PLOTS
 
-source("1. Prep of parameters and functions.R")
-source("2. Backwards iteration.R")
-source("3. Forward iteration.R")
+source("1_prep_functions.R")
+source("2_backwards_iteration.R")
+source("3_forward_iteration.R")
 
 # Required packages
 library(dplyr)
