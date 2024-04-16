@@ -1,7 +1,7 @@
 #### SCRIPT WITH FORWARD ITERATION ####
 
-source("1. Prep of parameters and functions.R")
-source("2. Backwards iteration.R")
+source("1_prep_function.R")
+source("2_backwards_iteration.R")
 
 
 ###### FORWARD ITERATION ######
